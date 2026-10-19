@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Seamless — Design Preview</title>
+  <!-- Google Fonts & Tailwind CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+          },
+          colors: {
+            // Preserved primary identity colors from reference design
+            cream: {
+              50: '#FDFCF9',
+              100: '#FAF8F3',
+              200: '#F3F0E6',
+              300: '#E8E4D8',
+              400: '#D5CFC2',
+              bg: '#EDE8DE',
+            },
+            forest: {
+              dark: '#0B2B1F',
+              muted: '#456F5B', // User specified muted forest green for Direct Wi-Fi & Send Files
+              accent: '#174D58', // Deep petrol / teal
+              text: '#1A231C',
+            },
+            moss: {
+              olive: '#91AB75', // Large drag & drop zone & paired hero cards
+              dark: '#637D4A',  // Dashed border
+              text: '#183119',
+              badge: '#C1D4AE', // Completed tag
+              sage: '#A8B99A',  // User specified soft sage green for Send Photos
+            },
+            coral: {
+              rose: '#DE8E85', // Dusty rose / terracotta accent
+              dark: '#5A201B',
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    /* Organic cream background with subtle warmth */
+    body {
+      background-color: #ECE7DD;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(248, 246, 240, 0.8) 0px, transparent 55%),
+        radial-gradient(at 100% 100%, rgba(226, 220, 206, 0.6) 0px, transparent 55%);
+      color: #1A231C;
+      min-height: 100vh;
+      overflow-x: hidden;
+      position: relative;
+    }
+
+    /* Subtle paper grain texture overlay matching the reference image */
+    .grain-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100vw;
+      height: 100vh;
+      pointer-events: none;
+      opacity: 0.04;
+      z-index: 9999;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E");
+    }
+
+    .clean-card {
+      background-color: #FAF8F3;
+      border: 1px solid rgba(0, 0, 0, 0.07);
+      box-shadow: 0 4px 20px -2px rgba(45, 55, 40, 0.05), 0 2px 6px -1px rgba(0, 0, 0, 0.03);
+    }
+
+    .clean-inner-card {
+      background-color: #FAF8F3;
+      border: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    /* Custom scrollbars */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(232, 228, 216, 0.5);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(145, 171, 117, 0.35);
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(145, 171, 117, 0.6);
+    }
+  </style>
+</head>
+<body class="p-4 md:p-8 font-sans antialiased selection:bg-[#456F5B] selection:text-white">
+
+  <!-- Grain Texture Overlay -->
+  <div class="grain-overlay"></div>
+
+  <!-- TOP CONTROL TOOLBAR -->
+  <header class="max-w-7xl mx-auto mb-8 flex flex-wrap items-center justify-between gap-4 clean-card p-3.5 rounded-[22px]">
+    <div class="flex items-center gap-3">
+      <!-- Logo in Deep Petrol -->
+      <div class="w-10 h-10 rounded-xl bg-forest-accent flex items-center justify-center shadow-sm">
+        <i data-lucide="zap" class="w-5 h-5 text-white"></i>
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-base font-bold tracking-tight text-forest-text">Seamless</h1>
+          <!-- DESIGN PREVIEW Badge in Dusty Rose -->
+          <span class="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-coral-rose text-white tracking-wider">Design Preview</span>
+        </div>
+        <p class="text-xs text-[#6C776D]">Android &bull; Windows Local Wi-Fi Ecosystem</p>
+      </div>
+    </div>
+
+    <!-- View Mode Switcher -->
+    <div class="flex items-center bg-[#ECE7DC] p-1 rounded-xl text-xs font-medium border border-[#DDD7C9]">
+      <button onclick="setViewMode('split')" id="btn-split" class="px-3.5 py-1.5 rounded-lg bg-forest-accent text-white font-semibold transition flex items-center gap-1.5 shadow-sm">
+        <i data-lucide="columns-2" class="w-3.5 h-3.5"></i> Dual View
+      </button>
+      <button onclick="setViewMode('windows')" id="btn-windows" class="px-3.5 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition flex items-center gap-1.5">
+        <i data-lucide="monitor" class="w-3.5 h-3.5"></i> Windows App
+      </button>
+      <button onclick="setViewMode('android')" id="btn-android" class="px-3.5 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition flex items-center gap-1.5">
+        <i data-lucide="smartphone" class="w-3.5 h-3.5"></i> Android App
+      </button>
+    </div>
+
+    <!-- Quick Prototype Actions -->
+    <div class="flex items-center gap-2">
+      <!-- Simulate Transfer Button in Dusty Rose -->
+      <button onclick="simulateTransfer()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-coral-rose text-white hover:opacity-90 shadow-sm transition flex items-center gap-1.5">
+        <i data-lucide="play" class="w-3 h-3 fill-current"></i> Simulate Transfer
+      </button>
+      <!-- Pairing Screen Button -->
+      <button onclick="openPairingModal()" class="px-3.5 py-1.5 text-xs font-semibold rounded-lg bg-cream-100 border border-[#D5CFC2] text-forest-text hover:bg-white shadow-sm transition flex items-center gap-1.5">
+        <i data-lucide="shield-check" class="w-3.5 h-3.5 text-forest-accent"></i> Pairing Screen
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN SHOWCASE GRID -->
+  <main class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+    
+    <!-- ============================================== -->
+    <!-- WINDOWS DESKTOP APP PREVIEW (Left / Column 1-8) -->
+    <!-- ============================================== -->
+    <section id="windows-container" class="lg:col-span-8 flex flex-col transition-all duration-300">
+      <div class="flex items-center justify-between mb-2.5 px-1">
+        <span class="text-xs font-bold uppercase tracking-wider text-[#5C665D] flex items-center gap-1.5">
+          <i data-lucide="monitor" class="w-4 h-4 text-forest-accent"></i> Windows Desktop Client
+        </span>
+        <span class="text-xs text-[#7B867C] font-medium">192.168.1.104 &bull; 5 GHz Wi-Fi</span>
+      </div>
+
+      <!-- Windows Window Frame -->
+      <div class="clean-card rounded-2xl overflow-hidden border border-[#DCD7CA]">
+        <!-- Title Bar in Deep Forest Green -->
+        <div class="bg-forest-dark px-4 py-2.5 flex items-center justify-between select-none">
+          <div class="flex items-center gap-2">
+            <i data-lucide="zap" class="w-3.5 h-3.5 text-[#7EE0A8]"></i>
+            <span class="text-xs font-medium text-[#A3C2B3]">Seamless &bull; Windows 11</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="px-2.5 py-0.5 rounded-full bg-[#133E2E] border border-[#1A4F3B] text-[11px] font-medium text-[#7EE0A8] flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-[#62D296] animate-pulse"></span>
+              Broadcasting on Wi-Fi
+            </span>
+            <!-- Window Control Icons -->
+            <div class="flex items-center gap-2 ml-1 text-[#A3C2B3]">
+              <span class="w-3 h-0.5 bg-[#A3C2B3] inline-block rounded cursor-pointer"></span>
+              <span class="w-2.5 h-2.5 border border-[#A3C2B3] inline-block rounded-sm cursor-pointer"></span>
+              <span class="w-4 h-4 rounded bg-coral-rose text-white text-[10px] font-bold flex items-center justify-center cursor-pointer">&times;</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 md:grid-cols-12 min-h-[580px] bg-[#FAF8F3]">
+          <!-- Windows Sidebar -->
+          <aside class="md:col-span-4 bg-[#F4F1E8] p-4 border-r border-[#E6E2D5] flex flex-col justify-between">
+            <div class="space-y-5">
+              <!-- User / PC Identity -->
+              <div class="flex items-center gap-3 p-2.5 rounded-xl bg-cream-100 border border-[#E0DBD0] shadow-sm">
+                <div class="w-9 h-9 rounded-lg bg-forest-accent flex items-center justify-center text-white">
+                  <i data-lucide="laptop" class="w-4 h-4"></i>
+                </div>
+                <div class="truncate">
+                  <div class="text-xs font-bold text-forest-text truncate">Laptop-Zenith</div>
+                  <div class="text-[11px] text-[#6C776D] flex items-center gap-1">
+                    <span class="w-1.5 h-1.5 rounded-full bg-[#637D4A]"></span> This PC &bull; Online
+                  </div>
+                </div>
+              </div>
+
+              <!-- Connected Devices List -->
+              <div>
+                <div class="flex items-center justify-between mb-2.5 px-1">
+                  <span class="text-[11px] font-bold uppercase tracking-wider text-[#6E7A6F]">Connected Devices</span>
+                  <!-- 1 Active Badge in Dusty Rose -->
+                  <span class="text-[10px] px-1.5 py-0.2 rounded-full bg-coral-rose text-white font-bold">1 Active</span>
+                </div>
+
+                <div class="space-y-2">
+                  <!-- Paired Device 1 (Active) - Olive Moss Green Background -->
+                  <div class="p-3 rounded-xl bg-moss-olive text-moss-text shadow-sm transition cursor-pointer">
+                    <div class="flex items-start justify-between">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-[#7E9665] text-white flex items-center justify-center">
+                          <i data-lucide="smartphone" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                          <div class="text-xs font-bold text-moss-text">Galaxy S24 Ultra</div>
+                          <div class="text-[10px] text-[#1E3A1C] font-semibold">Paired &bull; Low Latency (3ms)</div>
+                        </div>
+                      </div>
+                      <span class="w-2 h-2 rounded-full bg-[#183119]"></span>
+                    </div>
+                    <div class="mt-2.5 pt-2 border-t border-[#7E9665]/40 flex items-center justify-between text-[10px] text-[#1E3A1C] font-medium">
+                      <span>IP: 192.168.1.182</span>
+                      <span class="font-bold">Ready to receive</span>
+                    </div>
+                  </div>
+
+                  <!-- Discovered / Unpaired Device -->
+                  <div class="p-3 rounded-xl clean-inner-card hover:bg-white transition cursor-pointer">
+                    <div class="flex items-center justify-between">
+                      <div class="flex items-center gap-2.5">
+                        <div class="w-8 h-8 rounded-lg bg-[#E8E4D8] text-[#5C665D] flex items-center justify-center">
+                          <i data-lucide="tablet" class="w-4 h-4"></i>
+                        </div>
+                        <div>
+                          <div class="text-xs font-semibold text-forest-text">Pixel Tablet</div>
+                          <div class="text-[10px] text-[#7C877D]">Unpaired &bull; Nearby</div>
+                        </div>
+                      </div>
+                      <!-- Pair Button in Dusty Rose -->
+                      <button onclick="openPairingModal()" class="text-[10px] font-bold px-2.5 py-1 rounded-md bg-coral-rose text-white hover:opacity-90 transition">
+                        Pair
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Clipboard Sharing Toggle -->
+              <div class="p-3 rounded-xl clean-inner-card">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <i data-lucide="clipboard" class="w-4 h-4 text-forest-accent"></i>
+                    <span class="text-xs font-semibold text-forest-text">Clipboard Sync</span>
+                  </div>
+                  <label class="relative inline-flex items-center cursor-pointer">
+                    <input type="checkbox" id="clipboardToggle" checked class="sr-only peer" onchange="toggleClipboardToast()">
+                    <div class="w-8 h-4 bg-[#D5CFC2] peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-forest-accent"></div>
+                  </label>
+                </div>
+                <p class="text-[10px] text-[#7C877D] mt-1">Copy text on phone, paste directly on laptop.</p>
+              </div>
+            </div>
+
+            <!-- Bottom Settings button -->
+            <div class="pt-4 border-t border-[#E0DBD0] text-[#7C877D] flex items-center justify-between text-xs">
+              <span class="flex items-center gap-1.5 hover:text-forest-text cursor-pointer">
+                <i data-lucide="settings" class="w-3.5 h-3.5"></i> Network Config
+              </span>
+              <span class="font-mono text-[10px]">v0.1.0-alpha</span>
+            </div>
+          </aside>
+
+          <!-- Windows Main Workspace -->
+          <section class="md:col-span-8 p-6 flex flex-col justify-between bg-[#FAF8F3]">
+            <div>
+              <!-- Header Section -->
+              <div class="flex items-center justify-between mb-5">
+                <div>
+                  <h2 class="text-lg font-bold text-forest-text tracking-tight">Two-Way File Exchange</h2>
+                  <p class="text-xs text-[#687469]">Encrypted peer-to-peer transmission over local Wi-Fi</p>
+                </div>
+                <button onclick="triggerFilePick()" class="px-3 py-1.5 rounded-lg bg-cream-100 hover:bg-white text-xs font-medium text-forest-text border border-[#D8D3C6] flex items-center gap-1.5 shadow-sm transition">
+                  <i data-lucide="folder" class="w-3.5 h-3.5 text-forest-accent"></i> Open Download Folder
+                </button>
+              </div>
+
+              <!-- Large Drag & Drop Zone (Preserved Exact Olive Moss Shade: #91AB75) -->
+              <div id="dropzone" onclick="simulateTransfer()" class="border-2 border-dashed border-moss-dark bg-moss-olive rounded-2xl p-7 text-center transition duration-200 cursor-pointer shadow-sm relative overflow-hidden group">
+                <div class="w-12 h-12 mx-auto rounded-full bg-white text-forest-accent flex items-center justify-center mb-3 shadow-sm group-hover:scale-105 transition">
+                  <i data-lucide="upload-cloud" class="w-6 h-6"></i>
+                </div>
+                <h3 class="text-sm font-bold text-moss-text mb-1">Drag files here to send to Galaxy S24 Ultra</h3>
+                <p class="text-xs text-[#2E4A28] mb-3.5 font-medium">Or click anywhere in this zone to select files</p>
+                
+                <!-- USER REQUIREMENT 1: Direct Wi-Fi · Zero Cloud button in #456F5B (muted forest green) -->
+                <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-semibold text-white shadow-sm" style="background-color: #456F5B;">
+                  <i data-lucide="zap" class="w-3.5 h-3.5 text-white"></i> Direct Wi-Fi &bull; Zero Cloud
+                </span>
+              </div>
+
+              <!-- Live Active Transfer Card -->
+              <div id="active-transfer-panel" class="mt-5 clean-inner-card p-4 rounded-xl shadow-sm">
+                <div class="flex items-center justify-between mb-2">
+                  <div class="flex items-center gap-3">
+                    <!-- MP4 badge in Dusty Rose -->
+                    <div class="w-9 h-9 rounded-lg bg-coral-rose text-white flex items-center justify-center font-bold text-xs shadow-sm">
+                      MP4
+                    </div>
+                    <div>
+                      <div class="text-xs font-bold text-forest-text flex items-center gap-2">
+                        <span id="transfer-filename">Project_Showcase_4K.mp4</span>
+                        <!-- Outgoing Pill in Deep Petrol -->
+                        <span class="text-[9px] px-1.5 py-0.2 rounded bg-forest-accent text-white uppercase font-bold tracking-wider">Outgoing</span>
+                      </div>
+                      <div class="text-[11px] text-[#687469] flex items-center gap-2 mt-0.5">
+                        <span id="transfer-stats">342 MB of 680 MB</span>
+                        <span>&bull;</span>
+                        <span id="transfer-speed" class="text-forest-accent font-bold">54.2 MB/s</span>
+                        <span>&bull;</span>
+                        <span id="transfer-eta">ETA: 6s</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div class="flex items-center gap-2">
+                    <button id="transfer-action-btn" onclick="toggleTransferPause()" class="w-7 h-7 rounded-lg bg-[#ECE7DC] hover:bg-[#E2DDD0] flex items-center justify-center text-[#5C665D]">
+                      <i data-lucide="pause" class="w-3.5 h-3.5"></i>
+                    </button>
+                    <!-- Cancel Button in Dusty Rose -->
+                    <button onclick="cancelTransfer()" class="w-7 h-7 rounded-lg bg-coral-rose text-white hover:opacity-90 flex items-center justify-center shadow-sm">
+                      <i data-lucide="x" class="w-3.5 h-3.5"></i>
+                    </button>
+                  </div>
+                </div>
+
+                <!-- Progress Bar in Deep Petrol with Rounded Knob -->
+                <div class="w-full bg-[#E5E1D5] rounded-full h-2 relative overflow-visible mt-3">
+                  <div id="transfer-bar" class="bg-forest-accent h-full rounded-full transition-all duration-200 relative" style="width: 50%;">
+                    <div class="absolute right-0 top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-forest-accent border-2 border-white shadow-sm"></div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Transfer History Section -->
+              <div class="mt-5">
+                <div class="flex items-center justify-between mb-2.5">
+                  <span class="text-xs font-bold uppercase tracking-wider text-[#5C665D]">Transfer History</span>
+                  <button onclick="clearHistory()" class="text-[11px] text-[#5C665D] hover:text-forest-text transition">Clear History</button>
+                </div>
+
+                <div class="space-y-2" id="history-list">
+                  <!-- History Item 1 -->
+                  <div class="p-2.5 rounded-xl clean-inner-card flex items-center justify-between text-xs hover:border-[#D5CFC2] transition shadow-xs">
+                    <div class="flex items-center gap-3">
+                      <div class="w-7 h-7 rounded-lg bg-[#D6E2CB] text-[#23421C] flex items-center justify-center">
+                        <i data-lucide="check" class="w-3.5 h-3.5"></i>
+                      </div>
+                      <div>
+                        <div class="font-bold text-forest-text">IMG_20261019_163820.raw</div>
+                        <div class="text-[10px] text-[#687469]">From Galaxy S24 &bull; 48.2 MB &bull; 12 mins ago</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <!-- Completed Tag in Soft Sage Green -->
+                      <span class="text-[10px] font-bold text-[#23421C] bg-moss-badge px-2 py-0.5 rounded">Completed</span>
+                      <button class="text-[#7C877D] hover:text-forest-text p-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                  </div>
+
+                  <!-- History Item 2 -->
+                  <div class="p-2.5 rounded-xl clean-inner-card flex items-center justify-between text-xs hover:border-[#D5CFC2] transition shadow-xs">
+                    <div class="flex items-center gap-3">
+                      <div class="w-7 h-7 rounded-lg bg-[#D6E2CB] text-[#23421C] flex items-center justify-center">
+                        <i data-lucide="arrow-up-right" class="w-3.5 h-3.5"></i>
+                      </div>
+                      <div>
+                        <div class="font-bold text-forest-text">Seamless_Architecture_Draft.pdf</div>
+                        <div class="text-[10px] text-[#687469]">To Galaxy S24 &bull; 3.8 MB &bull; 45 mins ago</div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                      <!-- Completed Tag in Soft Sage Green -->
+                      <span class="text-[10px] font-bold text-[#23421C] bg-moss-badge px-2 py-0.5 rounded">Completed</span>
+                      <button class="text-[#7C877D] hover:text-forest-text p-1"><i data-lucide="external-link" class="w-3.5 h-3.5"></i></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Windows Footer notification bar -->
+            <div class="mt-5 pt-3 border-t border-[#E8E4D8] flex items-center justify-between text-[11px] text-[#7C877D]">
+              <span class="flex items-center gap-1.5 font-medium text-forest-text">
+                <i data-lucide="check-circle-2" class="w-3.5 h-3.5 text-forest-accent"></i> Local port 5173 listening
+              </span>
+              <span>Downloads saved to: <code class="text-forest-text bg-[#ECE7DC] px-1 py-0.5 rounded text-[10px]">C:\Users\Downloads\Seamless</code></span>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================================== -->
+    <!-- ANDROID MOBILE APP PREVIEW (Right / Column 9-12)-->
+    <!-- ============================================== -->
+    <section id="android-container" class="lg:col-span-4 flex flex-col items-center transition-all duration-300">
+      <div class="flex items-center justify-between w-full max-w-[350px] mb-2.5 px-1">
+        <span class="text-xs font-bold uppercase tracking-wider text-[#5C665D] flex items-center gap-1.5">
+          <i data-lucide="smartphone" class="w-4 h-4 text-forest-accent"></i> Android Mobile Client
+        </span>
+        <span class="text-xs text-[#7B867C] font-medium">Phone Portrait Mode</span>
+      </div>
+
+      <!-- Smartphone Physical Bezel in Deep Forest Green matching Titlebar -->
+      <div class="w-full max-w-[350px] rounded-[42px] p-3 bg-forest-dark shadow-2xl border-2 border-[#16382B] relative">
+        <!-- Inner Screen in Warm Off-White -->
+        <div class="rounded-[32px] bg-[#FAF8F3] overflow-hidden flex flex-col min-h-[620px] text-forest-text relative border border-[#E5E1D5]">
+          
+          <!-- Android Status Bar -->
+          <div class="px-6 pt-3 pb-2 flex items-center justify-between text-[11px] font-bold text-[#2E3A30] select-none">
+            <span>17:15</span>
+            <!-- Camera punch hole -->
+            <div class="w-3 h-3 rounded-full bg-forest-dark"></div>
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="wifi" class="w-3 h-3"></i>
+              <i data-lucide="battery" class="w-3.5 h-3.5"></i>
+            </div>
+          </div>
+
+          <!-- Android App Header -->
+          <div class="px-5 py-3 flex items-center justify-between border-b border-[#EAE6DC]">
+            <div class="flex items-center gap-2">
+              <div class="w-7 h-7 rounded-lg bg-forest-accent flex items-center justify-center shadow-xs">
+                <i data-lucide="zap" class="w-4 h-4 text-white"></i>
+              </div>
+              <span class="text-sm font-bold tracking-tight">Seamless</span>
+            </div>
+            <button onclick="openPairingModal()" class="w-7 h-7 rounded-lg clean-inner-card flex items-center justify-center text-forest-accent shadow-xs" title="Scan QR Code to Pair">
+              <i data-lucide="qr-code" class="w-4 h-4"></i>
+            </button>
+          </div>
+
+          <!-- Android Scrollable Content -->
+          <div class="flex-1 p-4 space-y-3.5 overflow-y-auto">
+            
+            <!-- Connected Laptop Hero Card in Olive Moss Green -->
+            <div class="p-4 rounded-2xl bg-moss-olive text-moss-text shadow-sm relative overflow-hidden">
+              <div class="flex items-center justify-between mb-3">
+                <div class="flex items-center gap-2.5">
+                  <div class="w-9 h-9 rounded-xl bg-[#7E9665] text-white flex items-center justify-center">
+                    <i data-lucide="laptop" class="w-4 h-4"></i>
+                  </div>
+                  <div>
+                    <h4 class="text-xs font-bold text-moss-text">Laptop-Zenith</h4>
+                    <p class="text-[10px] text-[#1E3A1C] font-semibold flex items-center gap-1">
+                      <span class="w-1.5 h-1.5 rounded-full bg-[#183119]"></span> Connected &bull; Ready
+                    </p>
+                  </div>
+                </div>
+                <span class="text-[10px] text-[#183119] font-semibold bg-[#7E9665]/30 px-2 py-0.5 rounded-full">5GHz</span>
+              </div>
+
+              <!-- Android Quick Actions Grid -->
+              <div class="grid grid-cols-2 gap-2 mt-2">
+                <!-- USER REQUIREMENT 2: Send Files button in #456F5B (muted forest green) with clear contrast white text -->
+                <button onclick="simulateTransfer()" class="p-2.5 rounded-xl font-semibold text-xs flex flex-col items-center justify-center gap-1 shadow-sm transition hover:opacity-95" style="background-color: #456F5B; color: #FFFFFF;">
+                  <i data-lucide="send" class="w-4 h-4 text-white"></i>
+                  <span class="font-bold">Send Files</span>
+                </button>
+                
+                <!-- USER REQUIREMENT 3: Send Photos button in #A8B99A (soft sage green) with clear contrast dark forest text -->
+                <button onclick="simulateTransfer()" class="p-2.5 rounded-xl font-semibold text-xs flex flex-col items-center justify-center gap-1 shadow-sm transition hover:opacity-95" style="background-color: #A8B99A; color: #183119;">
+                  <i data-lucide="image" class="w-4 h-4" style="color: #183119;"></i>
+                  <span class="font-bold">Send Photos</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Mobile Active Progress Indicator -->
+            <div id="mobile-transfer-card" class="p-3.5 rounded-xl clean-inner-card shadow-xs space-y-2">
+              <div class="flex items-center justify-between text-xs">
+                <div class="flex items-center gap-2 truncate">
+                  <i data-lucide="loader-2" class="w-3.5 h-3.5 text-forest-accent animate-spin"></i>
+                  <span id="mobile-filename" class="font-bold text-forest-text truncate text-[11px]">Project_Showcase_4K.mp4</span>
+                </div>
+                <span id="mobile-percent" class="text-forest-accent font-bold text-[11px]">50%</span>
+              </div>
+              <div class="w-full bg-[#E5E1D5] rounded-full h-1.5 overflow-hidden">
+                <div id="mobile-progress-bar" class="bg-forest-accent h-full rounded-full transition-all duration-200" style="width: 50%;"></div>
+              </div>
+              <div class="flex items-center justify-between text-[10px] text-[#687469] pt-0.5">
+                <span>Receiving from Laptop</span>
+                <span id="mobile-speed" class="text-forest-accent font-bold">54.2 MB/s</span>
+              </div>
+            </div>
+
+            <!-- Android Quick Clipboard Sync card -->
+            <div class="p-3 rounded-xl clean-inner-card flex items-center justify-between shadow-xs">
+              <div class="flex items-center gap-2">
+                <div class="w-7 h-7 rounded-lg bg-forest-accent text-white flex items-center justify-center">
+                  <i data-lucide="clipboard-copy" class="w-3.5 h-3.5"></i>
+                </div>
+                <div>
+                  <div class="text-[11px] font-bold text-forest-text">Clipboard Auto-Sync</div>
+                  <div class="text-[9px] text-[#7C877D]">Share clipboard across devices</div>
+                </div>
+              </div>
+              <span class="w-2 h-2 rounded-full bg-forest-accent"></span>
+            </div>
+
+            <!-- Recent Mobile Activity -->
+            <div>
+              <div class="flex items-center justify-between mb-2">
+                <span class="text-[11px] font-bold uppercase tracking-wider text-[#6E7A6F]">Recent Transfers</span>
+                <span class="text-[10px] text-[#7C877D]">2 files today</span>
+              </div>
+              <div class="space-y-2">
+                <!-- Mobile Item 1 -->
+                <div class="p-2.5 rounded-xl clean-inner-card flex items-center justify-between shadow-xs">
+                  <div class="flex items-center gap-2 truncate">
+                    <i data-lucide="file-text" class="w-4 h-4 text-forest-accent"></i>
+                    <div class="truncate">
+                      <div class="text-[11px] font-bold text-forest-text truncate">Architecture_Draft.pdf</div>
+                      <div class="text-[9px] text-[#7C877D]">Received &bull; 3.8 MB</div>
+                    </div>
+                  </div>
+                  <!-- Open button in Dusty Rose -->
+                  <button class="text-white text-[10px] font-bold px-2 py-0.5 rounded bg-coral-rose hover:opacity-90">Open</button>
+                </div>
+
+                <!-- Mobile Item 2 -->
+                <div class="p-2.5 rounded-xl clean-inner-card flex items-center justify-between shadow-xs">
+                  <div class="flex items-center gap-2 truncate">
+                    <i data-lucide="image" class="w-4 h-4 text-forest-accent"></i>
+                    <div class="truncate">
+                      <div class="text-[11px] font-bold text-forest-text truncate">IMG_20261019.raw</div>
+                      <div class="text-[9px] text-[#7C877D]">Sent &bull; 48.2 MB</div>
+                    </div>
+                  </div>
+                  <span class="text-[9px] text-[#7C877D]">12m ago</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Android Bottom Navigation -->
+          <div class="p-2.5 bg-[#FAF8F3] border-t border-[#EAE6DC] flex items-center justify-around text-xs">
+            <button class="px-3 py-1 rounded-full bg-forest-accent text-white font-semibold flex items-center gap-1.5 shadow-xs">
+              <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+              <span class="text-[10px]">Connect</span>
+            </button>
+            <button onclick="simulateTransfer()" class="flex flex-col items-center gap-0.5 text-[#5C665D] hover:text-forest-text">
+              <i data-lucide="arrow-left-right" class="w-4 h-4"></i>
+              <span class="text-[9px]">Transfer</span>
+            </button>
+            <button class="flex flex-col items-center gap-0.5 text-[#5C665D] hover:text-forest-text">
+              <i data-lucide="history" class="w-4 h-4"></i>
+              <span class="text-[9px]">History</span>
+            </button>
+          </div>
+          
+          <!-- Android Gesture Pill -->
+          <div class="w-20 h-1 bg-[#2E3A30] rounded-full mx-auto my-1.5"></div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ============================================== -->
+  <!-- MODAL: SECURE DEVICE PAIRING FLOW               -->
+  <!-- ============================================== -->
+  <div id="pairing-modal" class="fixed inset-0 z-50 bg-[#142820]/60 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="clean-card w-full max-w-md rounded-2xl p-6 border border-[#D5CFC2] shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+      <button onclick="closePairingModal()" class="absolute top-4 right-4 text-[#5C665D] hover:text-forest-text">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="text-center mb-6">
+        <div class="w-12 h-12 rounded-2xl bg-[#E8E4D8] text-forest-accent border border-[#DDD7C9] flex items-center justify-center mx-auto mb-3 shadow-xs">
+          <i data-lucide="shield-check" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-forest-text">Pair New Device</h3>
+        <p class="text-xs text-[#687469] mt-1">Connect your Android phone with this Windows laptop securely over your local Wi-Fi.</p>
+      </div>
+
+      <!-- Pairing Method Tabs -->
+      <div class="flex rounded-xl bg-[#ECE7DC] p-1 border border-[#DDD7C9] text-xs font-semibold mb-6">
+        <button id="tab-pin" onclick="setPairingTab('pin')" class="flex-1 py-1.5 rounded-lg bg-forest-accent text-white transition shadow-sm">6-Digit PIN</button>
+        <button id="tab-qr" onclick="setPairingTab('qr')" class="flex-1 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition">Scan QR Code</button>
+      </div>
+
+      <!-- 6-Digit PIN View -->
+      <div id="pairing-pin-view" class="space-y-4">
+        <div class="text-center">
+          <span class="text-[11px] text-[#6E7A6F] uppercase tracking-wider font-bold">Verification Code</span>
+          <div class="flex justify-center items-center gap-2 mt-2">
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">7</span>
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">4</span>
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">9</span>
+            <span class="text-[#8F8A7D] font-bold">&ndash;</span>
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">2</span>
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">1</span>
+            <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">8</span>
+          </div>
+          <p class="text-[11px] text-[#687469] mt-3">Enter these digits on your Android app to approve the pairing handshake.</p>
+        </div>
+      </div>
+
+      <!-- QR Code View -->
+      <div id="pairing-qr-view" class="hidden text-center space-y-3">
+        <div class="w-40 h-40 mx-auto rounded-2xl bg-white p-3 flex items-center justify-center shadow-md border border-[#E0DBD0]">
+          <!-- Mock QR SVG -->
+          <svg viewBox="0 0 100 100" class="w-full h-full text-forest-text fill-current">
+            <rect x="0" y="0" width="30" height="30" rx="4"/>
+            <rect x="70" y="0" width="30" height="30" rx="4"/>
+            <rect x="0" y="70" width="30" height="30" rx="4"/>
+            <rect x="40" y="10" width="20" height="10" />
+            <rect x="10" y="40" width="10" height="20" />
+            <rect x="40" y="40" width="20" height="20" />
+            <rect x="70" y="45" width="20" height="10" />
+            <rect x="45" y="70" width="15" height="20" />
+            <rect x="70" y="70" width="20" height="20" />
+          </svg>
+        </div>
+        <p class="text-[11px] text-[#687469]">Scan this code using the Seamless camera scanner on your phone.</p>
+      </div>
+
+      <div class="mt-6 pt-4 border-t border-[#E8E4D8] flex items-center justify-between text-xs">
+        <span class="text-[#7C877D]">Security: TLS 1.3 + Curve25519</span>
+        <button onclick="confirmPairing()" class="px-4 py-2 rounded-xl text-white font-semibold shadow-sm transition hover:opacity-90" style="background-color: #456F5B;">
+          Confirm Handshake
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST NOTIFICATION CONTAINER -->
+  <div id="toast" class="fixed bottom-6 right-6 z-50 clean-card px-4 py-3 rounded-xl border border-[#D5CFC2] text-xs text-forest-text shadow-xl flex items-center gap-2 transform translate-y-20 opacity-0 transition-all duration-300 pointer-events-none">
+    <i data-lucide="info" class="w-4 h-4 text-forest-accent"></i>
+    <span id="toast-message">Notification message here</span>
+  </div>
+
+  <!-- INTERACTIVE LOGIC SCRIPT -->
+  <script>
+    // Initialize icons
+    lucide.createIcons();
+
+    // View switcher state
+    function setViewMode(mode) {
+      const win = document.getElementById('windows-container');
+      const and = document.getElementById('android-container');
+      const bSplit = document.getElementById('btn-split');
+      const bWin = document.getElementById('btn-windows');
+      const bAnd = document.getElementById('btn-android');
+
+      // Reset button styles
+      [bSplit, bWin, bAnd].forEach(b => {
+        b.className = "px-3.5 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition flex items-center gap-1.5";
+      });
+
+      if (mode === 'split') {
+        win.classList.remove('hidden');
+        and.classList.remove('hidden');
+        win.className = "lg:col-span-8 flex flex-col transition-all duration-300";
+        and.className = "lg:col-span-4 flex flex-col items-center transition-all duration-300";
+        bSplit.className = "px-3.5 py-1.5 rounded-lg bg-forest-accent text-white font-semibold transition flex items-center gap-1.5 shadow-sm";
+      } else if (mode === 'windows') {
+        win.classList.remove('hidden');
+        and.classList.add('hidden');
+        win.className = "lg:col-span-12 flex flex-col transition-all duration-300";
+        bWin.className = "px-3.5 py-1.5 rounded-lg bg-forest-accent text-white font-semibold transition flex items-center gap-1.5 shadow-sm";
+      } else if (mode === 'android') {
+        win.classList.add('hidden');
+        and.classList.remove('hidden');
+        and.className = "lg:col-span-12 flex flex-col items-center transition-all duration-300";
+        bAnd.className = "px-3.5 py-1.5 rounded-lg bg-forest-accent text-white font-semibold transition flex items-center gap-1.5 shadow-sm";
+      }
+    }
+
+    // Modal Control
+    function openPairingModal() {
+      const modal = document.getElementById('pairing-modal');
+      modal.classList.remove('hidden');
+      modal.classList.add('flex');
+    }
+
+    function closePairingModal() {
+      const modal = document.getElementById('pairing-modal');
+      modal.classList.add('hidden');
+      modal.classList.remove('flex');
+    }
+
+    function setPairingTab(tab) {
+      const pinTab = document.getElementById('tab-pin');
+      const qrTab = document.getElementById('tab-qr');
+      const pinView = document.getElementById('pairing-pin-view');
+      const qrView = document.getElementById('pairing-qr-view');
+
+      if (tab === 'pin') {
+        pinTab.className = "flex-1 py-1.5 rounded-lg bg-forest-accent text-white transition shadow-sm";
+        qrTab.className = "flex-1 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition";
+        pinView.classList.remove('hidden');
+        qrView.classList.add('hidden');
+      } else {
+        qrTab.className = "flex-1 py-1.5 rounded-lg bg-forest-accent text-white transition shadow-sm";
+        pinTab.className = "flex-1 py-1.5 rounded-lg text-[#5C665D] hover:text-forest-text transition";
+        qrView.classList.remove('hidden');
+        pinView.classList.add('hidden');
+      }
+    }
+
+    function confirmPairing() {
+      closePairingModal();
+      showToast("Device paired securely! Low-latency session active.");
+    }
+
+    // Toast Alert
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      const toastMsg = document.getElementById('toast-message');
+      toastMsg.innerText = msg;
+      toast.classList.remove('translate-y-20', 'opacity-0');
+      setTimeout(() => {
+        toast.classList.add('translate-y-20', 'opacity-0');
+      }, 3500);
+    }
+
+    function toggleClipboardToast() {
+      const isChecked = document.getElementById('clipboardToggle').checked;
+      showToast(isChecked ? "Clipboard Sync enabled across devices" : "Clipboard Sync paused");
+    }
+
+    // Transfer Simulation
+    let progress = 50;
+    let transferInterval = null;
+    let isPaused = false;
+
+    function simulateTransfer() {
+      if (transferInterval) clearInterval(transferInterval);
+      progress = 0;
+      isPaused = false;
+      showToast("Starting peer-to-peer Wi-Fi transfer...");
+
+      const bar = document.getElementById('transfer-bar');
+      const mobBar = document.getElementById('mobile-progress-bar');
+      const stats = document.getElementById('transfer-stats');
+      const speed = document.getElementById('transfer-speed');
+      const mobSpeed = document.getElementById('mobile-speed');
+      const mobPercent = document.getElementById('mobile-percent');
+      const eta = document.getElementById('transfer-eta');
+
+      transferInterval = setInterval(() => {
+        if (!isPaused) {
+          progress += 5;
+          if (progress > 100) {
+            progress = 100;
+            clearInterval(transferInterval);
+            bar.style.width = '100%';
+            mobBar.style.width = '100%';
+            stats.innerText = "680 MB of 680 MB (100%)";
+            speed.innerText = "Done";
+            mobSpeed.innerText = "Done";
+            mobPercent.innerText = "100%";
+            eta.innerText = "Completed";
+            showToast("Transfer finished! File verified with SHA-256.");
+            return;
+          }
+          bar.style.width = progress + '%';
+          mobBar.style.width = progress + '%';
+          const sent = Math.round((progress / 100) * 680);
+          stats.innerText = `${sent} MB of 680 MB`;
+          mobPercent.innerText = progress + '%';
+          const currentSpeed = (46 + Math.random() * 16).toFixed(1);
+          speed.innerText = `${currentSpeed} MB/s`;
+          mobSpeed.innerText = `${currentSpeed} MB/s`;
+          eta.innerText = `ETA: ${Math.max(1, Math.round((100 - progress) / 10))}s`;
+        }
+      }, 300);
+    }
+
+    function toggleTransferPause() {
+      isPaused = !isPaused;
+      showToast(isPaused ? "Transfer paused" : "Transfer resumed");
+    }
+
+    function cancelTransfer() {
+      if (transferInterval) clearInterval(transferInterval);
+      document.getElementById('transfer-bar').style.width = '0%';
+      document.getElementById('mobile-progress-bar').style.width = '0%';
+      document.getElementById('transfer-stats').innerText = "0 MB of 680 MB";
+      document.getElementById('mobile-percent').innerText = "0%";
+      document.getElementById('transfer-eta').innerText = "Cancelled";
+      showToast("Transfer cancelled.");
+    }
+
+    function triggerFilePick() {
+      showToast("Destination: C:\\Users\\Downloads\\Seamless");
+    }
+
+    function clearHistory() {
+      document.getElementById('history-list').innerHTML = `
+        <div class="p-6 text-center text-xs text-[#7C877D]">
+          No recent transfers. All records cleared.
+        </div>
+      `;
+      showToast("Transfer history cleared.");
+    }
+  </script>
+</body>
+</html>

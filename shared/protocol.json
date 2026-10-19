@@ -1,0 +1,46 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "SeamlessProtocol",
+  "version": "1.0.0",
+  "ports": {
+    "discovery_udp": 52400,
+    "transfer_http": 5173
+  },
+  "messages": {
+    "discovery_beacon": {
+      "type": "SEAMLESS_DISCOVERY",
+      "device_id": "string",
+      "device_name": "string",
+      "device_type": "windows | android",
+      "ip_address": "string",
+      "port": 5173,
+      "protocol_version": "1.0.0"
+    },
+    "pair_request": {
+      "sender_id": "string",
+      "sender_name": "string",
+      "pin_code": "string (6-digit numeric)"
+    },
+    "pair_response": {
+      "success": "boolean",
+      "auth_token": "string",
+      "error": "string | null"
+    },
+    "file_transfer_header": {
+      "transfer_id": "string",
+      "file_name": "string",
+      "file_size": "number (bytes)",
+      "file_type": "string (MIME type)",
+      "sha256": "string",
+      "sender_id": "string",
+      "auth_token": "string"
+    },
+    "clipboard_payload": {
+      "sender_id": "string",
+      "auth_token": "string",
+      "content_type": "text/plain",
+      "content": "string",
+      "timestamp": "number"
+    }
+  }
+}
