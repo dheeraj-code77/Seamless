@@ -22,7 +22,16 @@ else:
 sys.path.insert(0, str(SRC_DIR))
 
 from core.server import run_server
-from core.config import load_config, get_local_ip
+from core.config import load_config, get_local_ip, CONFIG_DIR
+
+# Log output to seamless.log in %APPDATA%/Seamless
+log_path = CONFIG_DIR / "seamless.log"
+try:
+    log_file = open(log_path, "a", encoding="utf-8")
+    sys.stdout = log_file
+    sys.stderr = log_file
+except Exception:
+    pass
 
 
 def launch_desktop_window(url: str):
@@ -72,8 +81,9 @@ def main():
 
     server = run_server(port=port, renderer_dir=RENDERER_DIR)
 
-    # Launch desktop window in background thread
-    threading.Thread(target=launch_desktop_window, args=(f"http://localhost:{port}",), daemon=True).start()
+    # Launch desktop window in background thread unless headless
+    if "--no-window" not in sys.argv:
+        threading.Thread(target=launch_desktop_window, args=(f"http://localhost:{port}",), daemon=True).start()
 
     try:
         server.serve_forever()

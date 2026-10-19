@@ -196,6 +196,16 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             self._send_json({"success": True, "enabled": self.config["clipboard_sync_enabled"]})
             return
 
+        if path == "/api/settings/open_folder":
+            download_dir = self.config.get("download_dir", str(Path.home() / "Downloads" / "Seamless"))
+            try:
+                os.makedirs(download_dir, exist_ok=True)
+                os.startfile(download_dir)
+                self._send_json({"success": True})
+            except Exception as e:
+                self._send_json({"success": False, "error": str(e)}, 500)
+            return
+
         # 6. Clipboard Sync Endpoint
         if path == "/api/clipboard":
             body = self._read_json_body()
@@ -376,6 +386,7 @@ def run_server(port: int = 5173, renderer_dir: Path = None):
     SeamlessHandler.config = config
     SeamlessHandler.renderer_dir = renderer_dir
 
+    ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer(("0.0.0.0", port), SeamlessHandler)
     local_ip = get_local_ip()
     print(f"\n=======================================================")
