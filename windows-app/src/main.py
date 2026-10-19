@@ -11,14 +11,18 @@ import webbrowser
 import threading
 from pathlib import Path
 
-# Add core to module search path
-SRC_DIR = Path(__file__).resolve().parent
+if getattr(sys, 'frozen', False):
+    BASE_DIR = Path(sys._MEIPASS)
+    SRC_DIR = BASE_DIR / "windows-app" / "src"
+    RENDERER_DIR = SRC_DIR / "renderer"
+else:
+    SRC_DIR = Path(__file__).resolve().parent
+    RENDERER_DIR = SRC_DIR / "renderer"
+
 sys.path.insert(0, str(SRC_DIR))
 
 from core.server import run_server
 from core.config import load_config, get_local_ip
-
-RENDERER_DIR = SRC_DIR / "renderer"
 
 
 def launch_desktop_window(url: str):

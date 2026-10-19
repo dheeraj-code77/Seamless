@@ -305,12 +305,18 @@ class SeamlessHandler(BaseHTTPRequestHandler):
 
     def _serve_static(self, path: str):
         # Route to mobile app if requested
-        android_dir = Path(__file__).resolve().parent.parent.parent.parent / "android-app" / "src"
+        if getattr(sys, 'frozen', False):
+            base_dir = Path(sys._MEIPASS)
+            android_dir = base_dir / "android-app" / "src"
+        else:
+            android_dir = Path(__file__).resolve().parent.parent.parent.parent / "android-app" / "src"
 
         if path in ("/mobile", "/mobile/", "/android"):
             file_path = android_dir / "index.html"
         elif path in ("/mobile-app.js", "/mobile/mobile-app.js"):
             file_path = android_dir / "mobile-app.js"
+        elif path == "/manifest.json":
+            file_path = android_dir / "manifest.json"
         else:
             if path in ("", "/"):
                 path = "/index.html"

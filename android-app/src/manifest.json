@@ -1,0 +1,16 @@
+{
+  "name": "Seamless",
+  "short_name": "Seamless",
+  "start_url": "/mobile",
+  "display": "standalone",
+  "background_color": "#ECE7DD",
+  "theme_color": "#0B2B1F",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
