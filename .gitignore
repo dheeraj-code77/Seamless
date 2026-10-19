@@ -6,3 +6,24 @@ __pycache__/
 *.log
 .DS_Store
 Thumbs.db
+
+# PyInstaller / Python build caches
+build/
+*.spec.bak
+
+# Android build output and local SDK configuration
+.gradle/
+android-app/android/build/
+android-app/android/app/build/
+android-app/android/local.properties
+
+# Signing material must never be committed
+keystore.properties
+*.jks
+*.keystore
+
+# Superseded local artifact (replaced by dist/Seamless.apk)
+dist/Seamless-Android.apk
+
+# Local screenshots
+WhatsApp Image *.jpeg

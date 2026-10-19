@@ -2,6 +2,14 @@ plugins {
     id 'com.android.application'
 }
 
+// Release signing credentials live in keystore.properties, which is kept out of
+// version control. The build still works without it (unsigned/debug fallback).
+def keystorePropertiesFile = rootProject.file("keystore.properties")
+def keystoreProperties = new Properties()
+if (keystorePropertiesFile.exists()) {
+    keystoreProperties.load(new FileInputStream(keystorePropertiesFile))
+}
+
 android {
     compileSdkVersion 33
     buildToolsVersion "30.0.3"
@@ -14,10 +22,24 @@ android {
         versionName "1.1.0"
     }
 
+    signingConfigs {
+        release {
+            if (keystoreProperties['storeFile']) {
+                storeFile rootProject.file(keystoreProperties['storeFile'])
+                storePassword keystoreProperties['storePassword']
+                keyAlias keystoreProperties['keyAlias']
+                keyPassword keystoreProperties['keyPassword']
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (keystoreProperties['storeFile']) {
+                signingConfig signingConfigs.release
+            }
         }
     }
 

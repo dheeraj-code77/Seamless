@@ -233,6 +233,24 @@
             </div>
           </div>
 
+          <!-- Pair by QR — always visible, no extra clicks required -->
+          <div class="p-3 rounded-xl theme-card">
+            <div class="flex items-center justify-between mb-2">
+              <div class="flex items-center gap-2">
+                <i data-lucide="qr-code" class="w-4 h-4 text-[#174D58]"></i>
+                <span class="text-xs font-semibold theme-text-dark">Scan to Pair</span>
+              </div>
+              <button onclick="refreshPairingQr()" class="text-[#174D58] hover:opacity-70 transition" title="Refresh QR code">
+                <i data-lucide="refresh-cw" class="w-3.5 h-3.5"></i>
+              </button>
+            </div>
+            <div class="flex flex-col items-center gap-1.5">
+              <img id="pairing-qr-image" class="w-32 h-32 bg-white rounded-xl border border-[#E0DBD0] p-2" alt="Seamless pairing QR code">
+              <span class="text-[10px] theme-text-muted text-center leading-tight">Open Seamless on your phone and tap <strong>Scan QR</strong> to pair instantly.</span>
+              <span class="text-[10px] theme-text-faint font-mono text-center" id="pairing-qr-address">Loading...</span>
+            </div>
+          </div>
+
           <!-- Clipboard Sharing Toggle -->
           <div class="p-3 rounded-xl theme-card">
             <div class="flex items-center justify-between">
@@ -260,7 +278,7 @@
           <span class="flex items-center gap-1.5 hover:text-black cursor-pointer" onclick="openDownloadFolder()">
             <i data-lucide="folder" class="w-3.5 h-3.5 text-[#174D58]"></i> Downloads
           </span>
-          <span class="font-mono text-[10px] theme-text-faint">v1.0.0-core</span>
+          <span class="font-mono text-[10px] theme-text-faint">v1.1.0</span>
         </div>
       </aside>
 
@@ -370,7 +388,7 @@
           <i data-lucide="shield-check" class="w-6 h-6"></i>
         </div>
         <h3 class="text-lg font-bold theme-text-dark">Pair New Device</h3>
-        <p class="text-xs theme-text-muted mt-1">Scan this code in the Seamless Android app, then enter the one-time PIN to approve pairing.</p>
+        <p class="text-xs theme-text-muted mt-1">Scan this code in the Seamless Android app to pair instantly. The PIN is only needed if your phone asks for it.</p>
       </div>
 
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">

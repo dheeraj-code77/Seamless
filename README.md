@@ -7,11 +7,14 @@
 ## Key Features
 
 * **Approved Aesthetic Identity**: Preserves the warm cream background, organic paper grain overlay, deep forest green title bar, olive moss drag-and-drop zone (`#91AB75`), muted forest green action buttons (`#456F5B`), and soft sage photo picker (`#A8B99A`).
+* **Zero-Tap QR Pairing**: The laptop shows a pairing QR code the moment the app opens. Scanning it on the phone connects and pairs the two devices automatically — no IP address, hostname or PIN typing.
+* **Short-Lived Pairing Token**: The QR carries a single-use token that expires after 10 minutes. The permanent device credential is never shown on screen; it is exchanged server-side for a long-lived token.
+* **Self-Refreshing QR**: The code refreshes every 60 seconds, so it always carries the laptop's current local address and a valid token even if the network changes.
 * **Zero-Cloud, High-Speed Transfer**: Direct peer-to-peer streaming over local Wi-Fi (30–80+ MB/s over 5GHz Wi-Fi) with real-time speed counters, remaining ETA, and pause/resume/cancel controls.
 * **Integrity Validation**: Real-time SHA-256 chunked hashing ensures files arrive bit-for-bit identical with zero corruption.
 * **Path Traversal Security**: Strict directory sandboxing prevents directory escape attacks (`../../`) and automatically handles file collisions (`file (1).pdf`) without overwriting user data.
 * **Zero-Configuration Discovery**: Automated UDP broadcast beacon on port `52400` allows devices to locate each other without typing IP addresses.
-* **Secure Handshake**: 6-digit numeric PIN single-use authentication prevents unauthorized peers on your Wi-Fi from connecting.
+* **Manual PIN Fallback**: A 6-digit single-use PIN remains available inside **Pair New Device (PIN / QR)** if a phone cannot use the camera.
 * **Transfer History**: Persistent local records with filenames, sizes, directions, and direct folder open actions.
 * **Clipboard Synchronization**: Low-latency clipboard text sharing across linked devices.
 
@@ -60,34 +63,53 @@ SEAMLESS/
 
 ---
 
+## Installation
+
+### Windows
+1. Download **`Seamless.exe`** from the [latest release](https://github.com/dheeraj-code77/Seamless/releases/latest).
+2. Double-click it. No Python installation is required — the app is a standalone executable.
+3. Windows SmartScreen may show a blue "Windows protected your PC" panel. Click **More info → Run anyway**.
+
+The app opens in its own window (Microsoft Edge App Mode, or your default browser) and starts a local service on port `5173`.
+
+### Android
+1. Download **`Seamless.apk`** from the [latest release](https://github.com/dheeraj-code77/Seamless/releases/latest).
+2. Open the file on your phone and allow installs from your file manager / browser when prompted.
+3. Grant camera access the first time you use the scanner.
+
+Requires Android 5.0 (API 21) or newer.
+
+---
+
 ## How to Run Seamless
 
 ### 1. Launch on Windows
-You can run Seamless on your laptop in two ways:
-* **Option A**: Double-click **`Seamless.bat`** in this folder.
-* **Option B**: Double-click **`Seamless.vbs`** for a clean, borderless window with no console popup.
-* **Option C**: From your terminal:
-  ```powershell
-  python -m pip install -r requirements.txt
-  python windows-app\src\main.py
-  ```
+Download `Seamless.exe` and double-click it. The window shows a **Scan to Pair** panel with a live QR code and your laptop's Wi-Fi address.
 
-Seamless will automatically launch in a dedicated application window via Microsoft Edge App Mode (or your default browser) at `http://localhost:5173`.
+To run from source instead:
+```powershell
+python -m pip install -r requirements.txt
+python windows-app\src\main.py
+```
+(`Seamless.bat` and `Seamless.vbs` in the repository root are convenience launchers for the source version.)
 
 ### 2. Connect Your Android Phone
-1. Ensure your Android phone and Windows laptop are connected to the **same local Wi-Fi network**.
-2. Open the Seamless Android app and tap **Scan QR Code**.
-3. In the Windows app, open **Pair New Device (PIN / QR)** and scan its QR code with the Android app. The QR contains only the laptop's local IP address, port, and public device identifier; it does not contain the pairing PIN or authentication token.
-4. Enter the one-time 6-digit PIN shown in the Windows pairing dialog in the Android app. The PIN expires after five minutes and can only be used once.
-5. If you prefer the existing browser method, open Chrome or Samsung Internet and browse to:
-   ```
-   http://<YOUR_LAPTOP_IP>:5173/mobile
-   ```
-   *(Your laptop's local IP address is clearly shown in the top-left titlebar of the Windows app).*
-6. Tap the **Pair** button and enter the 6-digit PIN displayed on your laptop to link them.
-7. Tap **Send Files** or **Send Photos** on your phone: the file will stream straight to your laptop's `Downloads\Seamless` folder!
+1. Put your phone and laptop on the **same local Wi-Fi network**.
+2. Open the **Seamless** app on your phone.
+3. Tap **Scan QR Code** and point the camera at the QR code in the Windows app.
+4. The phone reads the code, connects to the laptop and pairs automatically. Both apps show a **Connected** status.
+5. Tap **Send Photos** or **Send Files** on the phone — the file streams straight into `Downloads\Seamless` on the laptop.
 
-The native scanner accepts Seamless QR codes for private local IPv4 addresses only and verifies the laptop's device identifier before opening the PIN prompt. If scanning or connecting fails, check that both devices are on the same Wi-Fi network and that Seamless is running on Windows. The browser connection remains available as a fallback.
+No IP address, hostname or PIN entry is required. The QR code carries a short-lived pairing token that is exchanged for a device credential automatically; it expires after 10 minutes and can only be redeemed once, and the Windows screen refreshes the code every minute so the address and token stay current.
+
+**Fallbacks**
+* If the camera is unavailable, use **Pair New Device (PIN / QR)** on the laptop and enter the one-time 6-digit PIN on the phone.
+* A browser client is also served at `http://<YOUR_LAPTOP_IP>:5173/mobile` (the laptop IP is shown in the Windows title bar).
+
+**Troubleshooting**
+* *"Laptop not reachable"* — both devices must be on the same Wi-Fi; the laptop firewall may need to allow the app on private networks.
+* *"This pairing code has expired"* — the code on screen rotated; scan the current one.
+* *"The QR code does not contain a valid local laptop address"* — only private IPv4 addresses (10.x, 172.16–31.x, 192.168.x) are accepted.
 
 ---
 
@@ -99,6 +121,34 @@ python tests\test_core.py
 ```
 This tests:
 1. Single-use 6-digit PIN handshake.
-2. Path sanitization and directory traversal prevention.
-3. Safe unique destination naming on filename collisions.
-4. Live HTTP streaming upload with SHA-256 validation.
+2. Short-lived, single-use QR pairing token lifecycle (expiry, replay rejection, token count cap).
+3. That the rendered QR image provably encodes the live pairing token.
+4. Zero-touch QR pairing followed by a file upload from the newly paired device.
+5. Path sanitization and directory traversal prevention.
+6. Safe unique destination naming on filename collisions.
+7. Live HTTP streaming upload with SHA-256 validation.
+
+The suite runs against a throwaway configuration, so it never touches your real settings or paired devices.
+
+---
+
+## Building From Source
+
+### Windows executable
+```powershell
+python -m pip install -r requirements.txt
+python -m PyInstaller --noconfirm --clean Seamless.spec
+```
+Output: `dist\Seamless.exe`
+
+### Android APK
+Requires the Android SDK (platform `android-33`, build-tools `30.0.3`) and Gradle 6.7.1.
+```powershell
+# android-app/android/local.properties must point at your SDK
+sdk.dir=C\:\\path\\to\\Android\\Sdk
+
+gradle assembleRelease
+```
+Output: `android-app\android\app\build\outputs\apk\release\app-release.apk`
+
+Release signing reads `android-app/android/keystore.properties`, which is deliberately **not** committed. Without it the build still succeeds but produces an unsigned APK.

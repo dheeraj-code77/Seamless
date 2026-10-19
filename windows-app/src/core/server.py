@@ -24,14 +24,17 @@ from .transfer_engine import TransferEngine
 from .discovery import DiscoveryService
 
 
-def create_pairing_qr_payload(host: str, port: int, device_id: str) -> str:
-    return json.dumps({
+def create_pairing_qr_payload(host: str, port: int, device_id: str, pairing_token: str = "") -> str:
+    payload = {
         "app": "seamless",
         "version": 1,
         "host": host,
         "port": port,
         "device_id": device_id
-    }, separators=(",", ":"))
+    }
+    if pairing_token:
+        payload["pairing_token"] = pairing_token
+    return json.dumps(payload, separators=(",", ":"))
 
 
 def create_pairing_qr_svg(payload: str) -> bytes:
@@ -87,10 +90,14 @@ class SeamlessHandler(BaseHTTPRequestHandler):
 
         # API Routes
         if path == "/api/pair/qr":
+            # A fresh short-lived token is embedded every time the code is rendered,
+            # so a scanned code can be redeemed exactly once and only while valid.
+            pairing_token = self.security.generate_pairing_token()
             payload = create_pairing_qr_payload(
                 get_local_ip(),
                 self.config.get("http_port", 5173),
-                self.config.get("device_id", "")
+                self.config.get("device_id", ""),
+                pairing_token
             )
             body = create_pairing_qr_svg(payload)
             self.send_response(200)
@@ -153,6 +160,42 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             self._send_json({
                 "pin": pin,
                 "expires_in": 300
+            })
+            return
+
+        if path == "/api/pair/exchange":
+            # Zero-touch pairing: the phone redeems the short-lived token that was
+            # embedded in the QR code and receives a durable device token.
+            body = self._read_json_body()
+            pairing_token = body.get("pairing_token", "")
+            device_id = body.get("device_id", "")
+            device_name = body.get("device_name", "Android Device")
+            device_ip = body.get("device_ip") or self.client_address[0]
+
+            if not device_id:
+                self._send_json({"success": False, "error": "A device id is required."}, 400)
+                return
+
+            if not self.security.verify_pairing_token(pairing_token):
+                self._send_json({
+                    "success": False,
+                    "error": "This pairing code has expired. Scan the QR code shown on the laptop again."
+                }, 401)
+                return
+
+            token = self.security.generate_token()
+            paired = self.config.setdefault("paired_devices", {})
+            paired[device_id] = {
+                "name": device_name,
+                "token": token,
+                "ip": device_ip,
+                "paired_at": int(time.time())
+            }
+            save_config(self.config)
+            self._send_json({
+                "success": True,
+                "token": token,
+                "device_name": self.config.get("device_name")
             })
             return
 
@@ -244,7 +287,7 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             try:
                 os.makedirs(download_dir, exist_ok=True)
                 os.startfile(download_dir)
-                self._send_json({"success": True})
+                self._send_json({"success": True, "download_dir": download_dir})
             except Exception as e:
                 self._send_json({"success": False, "error": str(e)}, 500)
             return
@@ -432,6 +475,8 @@ def run_server(port: int = 5173, renderer_dir: Path = None):
 
     ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer(("0.0.0.0", port), SeamlessHandler)
+    server.security = security
+    server.config = config
     local_ip = get_local_ip()
     print(f"\n=======================================================")
     print(f" Seamless Windows Core running on port {port}")

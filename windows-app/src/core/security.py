@@ -10,10 +10,45 @@ from pathlib import Path
 
 
 class SecurityManager:
+    # Maximum number of simultaneously valid QR pairing tokens.
+    # A new QR is generated every time the desktop UI refreshes the code, so a
+    # small window of tokens is kept alive to avoid invalidating a code that is
+    # being scanned at the exact moment the screen refreshes.
+    MAX_PAIRING_TOKENS = 3
+
     def __init__(self):
         self.active_pin = None
         self.pin_expiry = 0
         self.pending_sender_id = None
+        self.pairing_tokens = {}
+
+    def generate_pairing_token(self, lifetime_sec: int = 600) -> str:
+        """Generates a short-lived, single-use token embedded in the pairing QR code."""
+        self._prune_pairing_tokens()
+        token = secrets.token_urlsafe(32)
+        self.pairing_tokens[token] = time.time() + lifetime_sec
+        # Keep only the most recent tokens so old codes die out quickly.
+        if len(self.pairing_tokens) > self.MAX_PAIRING_TOKENS:
+            oldest = sorted(self.pairing_tokens.items(), key=lambda kv: kv[1])[0][0]
+            self.pairing_tokens.pop(oldest, None)
+        return token
+
+    def verify_pairing_token(self, submitted_token: str) -> bool:
+        """Validates a QR pairing token. Expired and already-used tokens are rejected."""
+        self._prune_pairing_tokens()
+        token = str(submitted_token or "").strip()
+        if not token or token not in self.pairing_tokens:
+            return False
+        expiry = self.pairing_tokens.pop(token)
+        if time.time() > expiry:
+            return False
+        return True
+
+    def _prune_pairing_tokens(self):
+        now = time.time()
+        for token, expiry in list(self.pairing_tokens.items()):
+            if now > expiry:
+                del self.pairing_tokens[token]
 
     def generate_pin(self, sender_id: str = None, lifetime_sec: int = 300) -> str:
         """Generates a secure 6-digit numeric PIN with a 5-minute expiry."""

@@ -13,6 +13,12 @@ import tempfile
 import threading
 from pathlib import Path
 
+# Run against a throwaway configuration so the real user settings and paired
+# devices are never touched by the test suite. This must happen before the
+# core modules are imported, because they read APPDATA at import time.
+_TEST_APP_DATA = tempfile.mkdtemp(prefix="seamless-tests-")
+os.environ["APPDATA"] = _TEST_APP_DATA
+
 # Add windows-app/src to search path
 SRC_DIR = Path(__file__).resolve().parent.parent / "windows-app" / "src"
 sys.path.insert(0, str(SRC_DIR))
@@ -20,7 +26,36 @@ sys.path.insert(0, str(SRC_DIR))
 from core.security import SecurityManager
 from core.history import HistoryManager
 from core.transfer_engine import TransferEngine
-from core.server import create_pairing_qr_payload, run_server
+from core.config import get_local_ip
+from core.server import (
+    create_pairing_qr_payload,
+    create_pairing_qr_svg,
+    run_server,
+)
+
+
+def test_pairing_token_lifecycle():
+    print("[Test] Running QR pairing token lifecycle tests...")
+    sec = SecurityManager()
+
+    token = sec.generate_pairing_token()
+    assert len(token) >= 32, "Pairing token should be long enough to resist guessing"
+    assert sec.verify_pairing_token(token) is True, "A fresh token must verify"
+    assert sec.verify_pairing_token(token) is False, "A token must be single-use"
+
+    assert sec.verify_pairing_token("wrong-token") is False
+    assert sec.verify_pairing_token("") is False
+
+    expired = sec.generate_pairing_token(lifetime_sec=-1)
+    assert sec.verify_pairing_token(expired) is False, "An expired token must be rejected"
+
+    # Only a small number of tokens stay valid so old codes die out quickly.
+    for _ in range(10):
+        sec.generate_pairing_token()
+    assert len(sec.pairing_tokens) <= SecurityManager.MAX_PAIRING_TOKENS, \
+        "Too many pairing tokens would keep stale codes alive"
+
+    print("  -> QR pairing token lifecycle passed!")
 
 
 def test_security_manager():
@@ -87,6 +122,9 @@ def test_server_api_and_file_transfer():
     print("[Test] Running live HTTP Server & File Transfer tests...")
     test_port = 59123
     server = run_server(port=test_port, renderer_dir=SRC_DIR / "renderer")
+    # Keep test downloads out of the user's real save folder.
+    test_download_dir = tempfile.mkdtemp(prefix="seamless-test-downloads-")
+    server.config["download_dir"] = test_download_dir
     server_thread = threading.Thread(target=server.serve_forever, daemon=True)
     server_thread.start()
     time.sleep(0.5)
@@ -111,6 +149,8 @@ def test_server_api_and_file_transfer():
             "port": test_port,
             "device_id": data["device_id"]
         }
+
+        # 1c. Prove the rendered QR really encodes the minted pairing token.
         with urllib.request.urlopen(f"{base_url}/api/pair/qr") as response:
             qr_svg = response.read().decode("utf-8")
             assert response.headers.get_content_type() == "image/svg+xml"
@@ -118,11 +158,80 @@ def test_server_api_and_file_transfer():
             assert "<svg" in qr_svg and "<path" in qr_svg
             assert "token" not in qr_svg.lower() and "pin" not in qr_svg.lower()
 
+        # Exactly one token was minted for that code, so we know what it encodes.
+        minted = list(server.security.pairing_tokens.keys())
+        assert len(minted) == 1, f"Expected one live pairing token, got {len(minted)}"
+        scanned_token = minted[0]
+
+        # Re-render the same payload locally: an identical SVG proves the code on
+        # screen carries the host, port, device id and the pairing token.
+        expected_svg = create_pairing_qr_svg(create_pairing_qr_payload(
+            get_local_ip(), test_port, data["device_id"], scanned_token
+        )).decode("utf-8")
+        assert qr_svg == expected_svg, "The QR image must encode the live pairing token"
+
         # 2. Pairing Flow
         req = urllib.request.Request(f"{base_url}/api/pair/request", method="POST", data=b"{}")
         pair_res = json.loads(urllib.request.urlopen(req).read().decode())
         pin = pair_res["pin"]
         assert len(pin) == 6
+
+        # 2a. Zero-touch QR pairing: the phone redeems the token it read from the
+        # QR code, exactly like the real scan flow.
+        exchange_payload = json.dumps({
+            "pairing_token": scanned_token,
+            "device_id": "qr_phone",
+            "device_name": "QR Test Phone"
+        }).encode()
+        exchange_req = urllib.request.Request(
+            f"{base_url}/api/pair/exchange", method="POST",
+            data=exchange_payload, headers={"Content-Type": "application/json"})
+        exchange_res = json.loads(urllib.request.urlopen(exchange_req).read().decode())
+        assert exchange_res["success"] is True, "QR token exchange should succeed"
+        qr_auth_token = exchange_res["token"]
+        assert len(qr_auth_token) > 10
+
+        # The QR token is single-use: replaying it must be rejected.
+        try:
+            urllib.request.urlopen(exchange_req)
+            raise AssertionError("A redeemed QR token must not be reusable")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Expected 401 for a replayed token, got {e.code}"
+
+        # An unknown token must be rejected as well.
+        bogus_req = urllib.request.Request(
+            f"{base_url}/api/pair/exchange", method="POST",
+            data=json.dumps({"pairing_token": "not-a-real-token", "device_id": "qr_phone2"}).encode(),
+            headers={"Content-Type": "application/json"})
+        try:
+            urllib.request.urlopen(bogus_req)
+            raise AssertionError("An invalid QR token must be rejected")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Expected 401 for an invalid token, got {e.code}"
+
+        # 2b. A phone that paired by QR can send files straight away.
+        qr_payload_bytes = b"Seamless QR paired transfer payload" * 2048
+        qr_sha = hashlib.sha256(qr_payload_bytes).hexdigest()
+        qr_headers = {
+            "X-Seamless-Filename": "qr_paired_upload.bin",
+            "X-Seamless-Filesize": str(len(qr_payload_bytes)),
+            "X-Seamless-Sender-Id": "qr_phone",
+            "X-Seamless-Sender-Name": "QR Test Phone",
+            "X-Seamless-Token": qr_auth_token,
+            "X-Seamless-SHA256": qr_sha,
+            "Content-Type": "application/octet-stream"
+        }
+        qr_file_req = urllib.request.Request(
+            f"{base_url}/api/transfer/send", method="POST",
+            data=qr_payload_bytes, headers=qr_headers)
+        qr_tx_res = json.loads(urllib.request.urlopen(qr_file_req).read().decode())
+        assert qr_tx_res["success"] is True, "A QR-paired device must be able to send files"
+        assert qr_tx_res["sha256"] == qr_sha
+        assert os.path.exists(qr_tx_res["saved_path"])
+        try:
+            os.unlink(qr_tx_res["saved_path"])
+        except Exception:
+            pass
 
         # Verify PIN
         verify_payload = json.dumps({"pin": pin, "device_id": "test_phone", "device_name": "Test Galaxy"}).encode()
@@ -169,6 +278,7 @@ def test_server_api_and_file_transfer():
 
 if __name__ == "__main__":
     test_security_manager()
+    test_pairing_token_lifecycle()
     test_transfer_engine_and_history()
     test_server_api_and_file_transfer()
     print("\n[SUCCESS] ALL WINDOWS CORE TESTS PASSED PERFECTLY!\n")

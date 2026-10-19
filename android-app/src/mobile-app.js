@@ -176,22 +176,76 @@ async function uploadSingleFile(file) {
 }
 
 // 3. Mobile Pairing Handshake
+function getMobileDeviceId() {
+  let id = localStorage.getItem("seamless_device_id");
+  if (!id) {
+    id = "android_" + Math.random().toString(36).substring(2, 10);
+    localStorage.setItem("seamless_device_id", id);
+  }
+  return id;
+}
+
+function getMobileDeviceName() {
+  return localStorage.getItem("seamless_device_name") || "Android Phone";
+}
+
 function openMobilePairingModal() {
   document.getElementById("mobile-pairing-modal").classList.remove("hidden");
   document.getElementById("mobile-pairing-modal").classList.add("flex");
 }
 
-async function setLaptopAddress(host, port) {
+async function setLaptopAddress(host, port, pairingToken) {
   laptopIp = host;
   laptopPort = String(port);
   document.getElementById("manual-laptop-ip").value = host;
   document.getElementById("target-pc-ip").innerText = host;
   localStorage.setItem("seamless_laptop_ip", host);
   localStorage.setItem("seamless_laptop_port", laptopPort);
-  if (await checkLaptopConnection()) {
-    openMobilePairingModal();
-  } else {
+
+  if (!(await checkLaptopConnection())) {
     showMobileToast("Laptop not reachable. Check that both devices are on the same Wi-Fi.");
+    return;
+  }
+
+  // The QR code carries a short-lived pairing token, so the phone pairs with the
+  // laptop automatically. The PIN prompt is only a fallback for older codes.
+  if (pairingToken) {
+    await completeAutomaticPairing(pairingToken);
+  } else {
+    openMobilePairingModal();
+  }
+}
+
+async function completeAutomaticPairing(pairingToken) {
+  try {
+    const res = await fetch(`http://${laptopIp}:${laptopPort}/api/pair/exchange`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        pairing_token: pairingToken,
+        device_id: getMobileDeviceId(),
+        device_name: getMobileDeviceName(),
+        device_ip: window.location.hostname
+      })
+    });
+
+    const data = await res.json();
+    if (res.ok && data.success) {
+      authToken = data.token;
+      localStorage.setItem("seamless_token", authToken);
+      localStorage.setItem("seamless_pc_name", data.device_name || "Windows Laptop");
+      closeMobilePairingModal();
+      showMobileToast(`Paired with ${data.device_name || "Windows Laptop"}!`);
+      if (window.SeamlessAndroid) {
+        window.SeamlessAndroid.pairingCompleted(data.device_name || "Windows Laptop");
+      }
+      await checkLaptopConnection();
+    } else {
+      showMobileToast(data.error || "Could not pair. Scan the QR code on the laptop again.");
+    }
+  } catch (err) {
+    console.error("Automatic pairing error:", err);
+    showMobileToast("Connection error: Could not reach laptop.");
   }
 }
 
@@ -222,8 +276,8 @@ async function submitPairingPin() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         pin: pin,
-        device_id: "android_client_" + Math.random().toString(36).substring(7),
-        device_name: "Galaxy S24 Ultra",
+        device_id: getMobileDeviceId(),
+        device_name: getMobileDeviceName(),
         device_ip: window.location.hostname
       })
     });

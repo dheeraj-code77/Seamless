@@ -170,6 +170,7 @@ public class MainActivity extends Activity {
         final JSONObject qr;
         final String host;
         final String deviceId;
+        final String pairingToken;
         final int port;
         try {
             qr = new JSONObject(contents);
@@ -178,6 +179,7 @@ public class MainActivity extends Activity {
             }
             host = qr.getString("host");
             deviceId = qr.getString("device_id");
+            pairingToken = qr.optString("pairing_token", "");
             port = qr.getInt("port");
             if (!isPrivateIpv4(host) || port < 1 || port > 65535 || deviceId.isEmpty()) {
                 throw new JSONException("The QR code does not contain a valid local laptop address.");
@@ -217,10 +219,11 @@ public class MainActivity extends Activity {
                 }
                 mainHandler.post(() -> {
                     pairingStatus.setText("Connected to " + info.optString("device_name")
-                            + ". Enter the PIN displayed on Windows.");
+                            + ". Pairing you now…");
                     String hostArgument = JSONObject.quote(host);
+                    String tokenArgument = JSONObject.quote(pairingToken);
                     webView.evaluateJavascript(
-                            "setLaptopAddress(" + hostArgument + "," + port + ")", null);
+                            "setLaptopAddress(" + hostArgument + "," + port + "," + tokenArgument + ")", null);
                 });
             } catch (Exception e) {
                 String message = e instanceof java.net.SocketTimeoutException

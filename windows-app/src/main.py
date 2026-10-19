@@ -27,7 +27,8 @@ from core.config import load_config, get_local_ip, CONFIG_DIR
 # Log output to seamless.log in %APPDATA%/Seamless
 log_path = CONFIG_DIR / "seamless.log"
 try:
-    log_file = open(log_path, "a", encoding="utf-8")
+    # Line buffered so the log is readable while the app is running.
+    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
     sys.stdout = log_file
     sys.stderr = log_file
 except Exception:

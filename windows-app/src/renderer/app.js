@@ -3,6 +3,7 @@ let currentConfig = null;
 let selectedTargetDevice = null;
 let pollStatusInterval = null;
 let pollDevicesInterval = null;
+let qrRefreshInterval = null;
 
 document.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) lucide.createIcons();
@@ -14,9 +15,34 @@ async function initApp() {
   await fetchDevices();
   await fetchHistory();
 
+  // The pairing QR code is shown as soon as the app opens and refreshes on its
+  // own so the embedded address and token never go stale.
+  await refreshPairingQr();
+
   // Polling loops
   pollDevicesInterval = setInterval(fetchDevices, 3000);
   pollStatusInterval = setInterval(fetchTransferStatus, 600);
+  qrRefreshInterval = setInterval(refreshPairingQr, 60000);
+}
+
+// 0. Always-visible Pairing QR Code
+async function refreshPairingQr() {
+  try {
+    const res = await fetch(`/api/pair/qr?refresh=${Date.now()}`);
+    if (!res.ok) throw new Error(`QR request failed with status ${res.status}.`);
+    const img = document.getElementById("pairing-qr-image");
+    const blob = await res.blob();
+    const objectUrl = URL.createObjectURL(blob);
+    if (img.dataset.objectUrl) URL.revokeObjectURL(img.dataset.objectUrl);
+    img.dataset.objectUrl = objectUrl;
+    img.src = objectUrl;
+    const address = document.getElementById("pairing-qr-address");
+    if (address && currentConfig) {
+      address.innerText = `${currentConfig.ip}:${currentConfig.port}`;
+    }
+  } catch (err) {
+    console.error("Error refreshing pairing QR:", err);
+  }
 }
 
 // 1. Fetch Local Device Info
@@ -409,9 +435,19 @@ async function toggleClipboardSync(checkbox) {
 }
 
 // 9. Folder Actions
-function openDownloadFolder() {
-  const dir = currentConfig?.download_dir || "C:\\Users\\Downloads\\Seamless";
-  showToast(`Downloads stored at: ${dir}`);
+async function openDownloadFolder() {
+  try {
+    const res = await fetch("/api/settings/open_folder", { method: "POST" });
+    const data = await res.json();
+    if (data.success) {
+      showToast(`Downloads opened: ${data.download_dir || currentConfig?.download_dir || ""}`);
+    } else {
+      showToast(data.error || "Could not open the downloads folder.");
+    }
+  } catch (err) {
+    console.error(err);
+    showToast(`Downloads are stored at: ${currentConfig?.download_dir || ""}`);
+  }
 }
 
 function openFolderAtPath(path) {
