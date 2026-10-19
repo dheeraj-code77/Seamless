@@ -374,9 +374,10 @@ function closePairingModal() {
 async function requestNewPin() {
   try {
     const res = await fetch("/api/pair/request", { method: "POST" });
-    if (!res.ok) return;
+    if (!res.ok) throw new Error(`Pairing PIN request failed with status ${res.status}.`);
     const data = await res.json();
     const pin = data.pin.toString();
+    document.getElementById("pairing-qr-code").src = `/api/pair/qr?refresh=${Date.now()}`;
     const container = document.getElementById("pin-boxes-container");
     container.innerHTML = `
       <span class="w-10 h-12 rounded-xl bg-cream-100 border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-forest-accent shadow-xs">${pin[0]}</span>
@@ -389,6 +390,7 @@ async function requestNewPin() {
     `;
   } catch (err) {
     console.error("Error requesting PIN:", err);
+    showToast("Could not prepare secure pairing. Check the local server and try again.");
   }
 }
 

@@ -360,7 +360,7 @@
 
   <!-- PAIRING MODAL -->
   <div id="pairing-modal" class="fixed inset-0 z-50 bg-[#142820]/60 backdrop-blur-sm hidden items-center justify-center p-4">
-    <div class="theme-card w-full max-w-md rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
+    <div class="theme-card w-full max-w-2xl rounded-2xl p-6 shadow-2xl relative animate-in fade-in zoom-in-95 duration-200">
       <button onclick="closePairingModal()" class="absolute top-4 right-4 text-[#5C665D] hover:text-black">
         <i data-lucide="x" class="w-5 h-5"></i>
       </button>
@@ -370,23 +370,30 @@
           <i data-lucide="shield-check" class="w-6 h-6"></i>
         </div>
         <h3 class="text-lg font-bold theme-text-dark">Pair New Device</h3>
-        <p class="text-xs theme-text-muted mt-1">Enter this 6-digit code on your Android phone to approve the pairing handshake.</p>
+        <p class="text-xs theme-text-muted mt-1">Scan this code in the Seamless Android app, then enter the one-time PIN to approve pairing.</p>
       </div>
 
-      <!-- 6-Digit PIN Display -->
-      <div class="space-y-4">
-        <div class="text-center">
-          <span class="text-[11px] text-[#6E7A6F] uppercase tracking-wider font-bold">One-Time Verification PIN</span>
-          <div class="flex justify-center items-center gap-2 mt-2" id="pin-boxes-container">
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
-            <span class="text-[#8F8A7D] font-bold">&ndash;</span>
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
-            <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 items-center">
+        <div class="flex flex-col items-center gap-2">
+          <img id="pairing-qr-code" class="w-48 h-48 bg-white rounded-xl border border-[#E0DBD0] p-2" alt="QR code with this laptop's local network address">
+          <span class="text-[11px] theme-text-muted text-center">Scan with the Seamless Android app</span>
+        </div>
+
+        <!-- 6-Digit PIN Display -->
+        <div class="space-y-4">
+          <div class="text-center">
+            <span class="text-[11px] text-[#6E7A6F] uppercase tracking-wider font-bold">One-Time Verification PIN</span>
+            <div class="flex justify-center items-center gap-2 mt-2" id="pin-boxes-container">
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+              <span class="text-[#8F8A7D] font-bold">&ndash;</span>
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+              <span class="w-10 h-12 rounded-xl bg-[#FAF8F3] border border-[#D5CFC2] flex items-center justify-center text-xl font-mono font-bold text-[#174D58] shadow-xs">-</span>
+            </div>
+            <p class="text-[11px] theme-text-muted mt-3">Enter this PIN on your phone. It expires after 5 minutes and can only be used once.</p>
           </div>
-          <p class="text-[11px] theme-text-muted mt-3">Valid for 5 minutes. Handshake is encrypted locally.</p>
         </div>
       </div>
 

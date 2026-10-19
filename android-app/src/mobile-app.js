@@ -1,6 +1,8 @@
 // Seamless Android Mobile Client Logic
 let laptopIp = window.location.hostname || "127.0.0.1";
 let laptopPort = window.location.port || "5173";
+let savedLaptopPort = localStorage.getItem("seamless_laptop_port");
+if (savedLaptopPort) laptopPort = savedLaptopPort;
 let authToken = localStorage.getItem("seamless_token") || "";
 let pairedPcName = localStorage.getItem("seamless_pc_name") || "Windows Laptop";
 let mobileHistory = JSON.parse(localStorage.getItem("seamless_mobile_history") || "[]");
@@ -179,6 +181,20 @@ function openMobilePairingModal() {
   document.getElementById("mobile-pairing-modal").classList.add("flex");
 }
 
+async function setLaptopAddress(host, port) {
+  laptopIp = host;
+  laptopPort = String(port);
+  document.getElementById("manual-laptop-ip").value = host;
+  document.getElementById("target-pc-ip").innerText = host;
+  localStorage.setItem("seamless_laptop_ip", host);
+  localStorage.setItem("seamless_laptop_port", laptopPort);
+  if (await checkLaptopConnection()) {
+    openMobilePairingModal();
+  } else {
+    showMobileToast("Laptop not reachable. Check that both devices are on the same Wi-Fi.");
+  }
+}
+
 function closeMobilePairingModal() {
   document.getElementById("mobile-pairing-modal").classList.add("hidden");
   document.getElementById("mobile-pairing-modal").classList.remove("flex");
@@ -217,7 +233,10 @@ async function submitPairingPin() {
       authToken = data.token;
       localStorage.setItem("seamless_token", authToken);
       closeMobilePairingModal();
-      showMobileToast("Paired successfully with Windows Laptop!");
+      showMobileToast(`Paired successfully with ${data.device_name || "Windows Laptop"}!`);
+      if (window.SeamlessAndroid) {
+        window.SeamlessAndroid.pairingCompleted(data.device_name || "Windows Laptop");
+      }
       await checkLaptopConnection();
     } else {
       showMobileToast(data.error || "Incorrect or expired PIN.");

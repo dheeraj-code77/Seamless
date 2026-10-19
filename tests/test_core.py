@@ -20,7 +20,7 @@ sys.path.insert(0, str(SRC_DIR))
 from core.security import SecurityManager
 from core.history import HistoryManager
 from core.transfer_engine import TransferEngine
-from core.server import run_server
+from core.server import create_pairing_qr_payload, run_server
 
 
 def test_security_manager():
@@ -100,6 +100,24 @@ def test_server_api_and_file_transfer():
         assert data["device_type"] == "windows"
         assert data["port"] == 5173 or data["port"] == test_port
 
+        # 1b. QR Pairing Code
+        qr_payload = json.loads(create_pairing_qr_payload(
+            data["ip"], data["port"], data["device_id"]
+        ))
+        assert qr_payload == {
+            "app": "seamless",
+            "version": 1,
+            "host": data["ip"],
+            "port": test_port,
+            "device_id": data["device_id"]
+        }
+        with urllib.request.urlopen(f"{base_url}/api/pair/qr") as response:
+            qr_svg = response.read().decode("utf-8")
+            assert response.headers.get_content_type() == "image/svg+xml"
+            assert response.headers.get("Cache-Control") == "no-store"
+            assert "<svg" in qr_svg and "<path" in qr_svg
+            assert "token" not in qr_svg.lower() and "pin" not in qr_svg.lower()
+
         # 2. Pairing Flow
         req = urllib.request.Request(f"{base_url}/api/pair/request", method="POST", data=b"{}")
         pair_res = json.loads(urllib.request.urlopen(req).read().decode())
@@ -113,6 +131,8 @@ def test_server_api_and_file_transfer():
         assert verify_res["success"] is True
         token = verify_res["token"]
         assert len(token) > 10
+        paired_res = json.loads(urllib.request.urlopen(f"{base_url}/api/devices").read().decode())
+        assert paired_res["paired"]["test_phone"]["ip"] == "127.0.0.1"
 
         # 3. File Streaming Transfer
         test_content = b"Seamless High-Speed Wi-Fi File Transfer Test Payload" * 1024  # ~50 KB

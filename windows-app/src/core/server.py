@@ -9,15 +9,43 @@ import time
 import urllib.parse
 import hashlib
 import mimetypes
+from io import BytesIO
 from pathlib import Path
 from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from typing import Dict, Any
+
+import qrcode
+from qrcode.image.svg import SvgPathImage
 
 from .config import load_config, save_config, get_local_ip
 from .security import SecurityManager
 from .history import HistoryManager
 from .transfer_engine import TransferEngine
 from .discovery import DiscoveryService
+
+
+def create_pairing_qr_payload(host: str, port: int, device_id: str) -> str:
+    return json.dumps({
+        "app": "seamless",
+        "version": 1,
+        "host": host,
+        "port": port,
+        "device_id": device_id
+    }, separators=(",", ":"))
+
+
+def create_pairing_qr_svg(payload: str) -> bytes:
+    qr = qrcode.QRCode(
+        version=None,
+        error_correction=qrcode.constants.ERROR_CORRECT_M,
+        box_size=8,
+        border=4
+    )
+    qr.add_data(payload)
+    qr.make(fit=True)
+    output = BytesIO()
+    qr.make_image(image_factory=SvgPathImage).save(output)
+    return output.getvalue()
 
 
 class SeamlessHandler(BaseHTTPRequestHandler):
@@ -58,6 +86,21 @@ class SeamlessHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         # API Routes
+        if path == "/api/pair/qr":
+            payload = create_pairing_qr_payload(
+                get_local_ip(),
+                self.config.get("http_port", 5173),
+                self.config.get("device_id", "")
+            )
+            body = create_pairing_qr_svg(payload)
+            self.send_response(200)
+            self.send_header("Content-Type", "image/svg+xml")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-store")
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         if path == "/api/device/info":
             self._send_json({
                 "device_id": self.config.get("device_id"),
@@ -118,7 +161,7 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             pin = body.get("pin", "")
             device_id = body.get("device_id", "")
             device_name = body.get("device_name", "Remote Device")
-            device_ip = body.get("device_ip", self.client_address[0])
+            device_ip = body.get("device_ip") or self.client_address[0]
 
             if self.security.verify_pin(pin):
                 token = self.security.generate_token()
@@ -370,6 +413,7 @@ class SeamlessHandler(BaseHTTPRequestHandler):
 
 def run_server(port: int = 5173, renderer_dir: Path = None):
     config = load_config()
+    config["http_port"] = port
     security = SecurityManager()
     history = HistoryManager()
     transfer = TransferEngine(history)

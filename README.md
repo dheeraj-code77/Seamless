@@ -68,6 +68,7 @@ You can run Seamless on your laptop in two ways:
 * **Option B**: Double-click **`Seamless.vbs`** for a clean, borderless window with no console popup.
 * **Option C**: From your terminal:
   ```powershell
+  python -m pip install -r requirements.txt
   python windows-app\src\main.py
   ```
 
@@ -75,13 +76,18 @@ Seamless will automatically launch in a dedicated application window via Microso
 
 ### 2. Connect Your Android Phone
 1. Ensure your Android phone and Windows laptop are connected to the **same local Wi-Fi network**.
-2. Open Chrome or Samsung Internet on your phone and browse to:
+2. Open the Seamless Android app and tap **Scan QR Code**.
+3. In the Windows app, open **Pair New Device (PIN / QR)** and scan its QR code with the Android app. The QR contains only the laptop's local IP address, port, and public device identifier; it does not contain the pairing PIN or authentication token.
+4. Enter the one-time 6-digit PIN shown in the Windows pairing dialog in the Android app. The PIN expires after five minutes and can only be used once.
+5. If you prefer the existing browser method, open Chrome or Samsung Internet and browse to:
    ```
    http://<YOUR_LAPTOP_IP>:5173/mobile
    ```
    *(Your laptop's local IP address is clearly shown in the top-left titlebar of the Windows app).*
-3. Tap the **Pair** button and enter the 6-digit PIN displayed on your laptop to link them.
-4. Tap **Send Files** or **Send Photos** on your phone: the file will stream straight to your laptop's `Downloads\Seamless` folder!
+6. Tap the **Pair** button and enter the 6-digit PIN displayed on your laptop to link them.
+7. Tap **Send Files** or **Send Photos** on your phone: the file will stream straight to your laptop's `Downloads\Seamless` folder!
+
+The native scanner accepts Seamless QR codes for private local IPv4 addresses only and verifies the laptop's device identifier before opening the PIN prompt. If scanning or connecting fails, check that both devices are on the same Wi-Fi network and that Seamless is running on Windows. The browser connection remains available as a fallback.
 
 ---
 
