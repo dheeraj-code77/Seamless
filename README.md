@@ -53,11 +53,25 @@ end-to-end.
 
 Both devices must be on the same local Wi-Fi network.
 
+## Download
+
+The current binaries are on the
+[Seamless 1.2.0 release](https://github.com/dheeraj-code77/Seamless/releases/tag/v1.2.0)
+page.
+
+| | Windows | Android |
+| --- | --- | --- |
+| File | [`Seamless.exe`](https://github.com/dheeraj-code77/Seamless/releases/download/v1.2.0/Seamless.exe) | [`Seamless.apk`](https://github.com/dheeraj-code77/Seamless/releases/download/v1.2.0/Seamless.apk) |
+| Needs | Windows 10 or 11 | Android 5.0 or newer |
+
+Earlier versions stay available on the
+[releases page](https://github.com/dheeraj-code77/Seamless/releases).
+
 ## Install
 
 ### Windows
 
-1. Download `Seamless.exe` from the [latest release](https://github.com/dheeraj-code77/Seamless/releases/latest).
+1. Download [`Seamless.exe`](https://github.com/dheeraj-code77/Seamless/releases/download/v1.2.0/Seamless.exe).
 2. Open it. Windows may show *"Windows protected your PC"* because the build is
    unsigned — choose **More info → Run anyway**.
 
@@ -66,7 +80,7 @@ default browser) and the app starts listening on port `5173`.
 
 ### Android
 
-1. Download `Seamless.apk` from the [latest release](https://github.com/dheeraj-code77/Seamless/releases/latest).
+1. Download [`Seamless.apk`](https://github.com/dheeraj-code77/Seamless/releases/download/v1.2.0/Seamless.apk).
 2. Open the file on your phone and allow installation from your file manager
    when Android asks.
 3. Grant camera access the first time you scan a pairing code.
