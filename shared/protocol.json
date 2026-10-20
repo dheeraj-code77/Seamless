@@ -1,7 +1,7 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
   "title": "SeamlessProtocol",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "ports": {
     "discovery_udp": 52400,
     "transfer_http": 5173
@@ -12,35 +12,64 @@
       "device_id": "string",
       "device_name": "string",
       "device_type": "windows | android",
-      "ip_address": "string",
+      "ip": "string (private IPv4)",
       "port": 5173,
-      "protocol_version": "1.0.0"
+      "version": "1.0.0",
+      "timestamp": "number (unix seconds)"
     },
-    "pair_request": {
-      "sender_id": "string",
-      "sender_name": "string",
-      "pin_code": "string (6-digit numeric)"
+    "pairing_qr_payload": {
+      "app": "seamless",
+      "version": 1,
+      "host": "string (private IPv4)",
+      "port": 5173,
+      "device_id": "string",
+      "pairing_token": "string (single use, 10 minute lifetime)"
     },
-    "pair_response": {
+    "pair_exchange_request": {
+      "pairing_token": "string",
+      "device_id": "string",
+      "device_name": "string",
+      "device_ip": "string (optional)"
+    },
+    "pair_exchange_response": {
       "success": "boolean",
-      "auth_token": "string",
+      "token": "string (long lived device token)",
+      "device_name": "string"
+    },
+    "pair_verify_request": {
+      "pin": "string (6 digit numeric, 5 minute lifetime)",
+      "device_id": "string",
+      "device_name": "string",
+      "device_ip": "string (optional)"
+    },
+    "pair_verify_response": {
+      "success": "boolean",
+      "token": "string (long lived device token)",
+      "device_name": "string",
       "error": "string | null"
     },
-    "file_transfer_header": {
-      "transfer_id": "string",
-      "file_name": "string",
-      "file_size": "number (bytes)",
-      "file_type": "string (MIME type)",
+    "file_transfer_headers": {
+      "X-Seamless-Filename": "string",
+      "X-Seamless-Filesize": "number (bytes)",
+      "X-Seamless-Sender-Id": "string",
+      "X-Seamless-Sender-Name": "string",
+      "X-Seamless-SHA256": "string (hex digest)",
+      "X-Seamless-Token": "string (device token of a paired peer)"
+    },
+    "file_transfer_response": {
+      "success": "boolean",
+      "saved_path": "string",
       "sha256": "string",
-      "sender_id": "string",
-      "auth_token": "string"
+      "bytes_received": "number (bytes)"
     },
     "clipboard_payload": {
-      "sender_id": "string",
-      "auth_token": "string",
-      "content_type": "text/plain",
-      "content": "string",
-      "timestamp": "number"
+      "text": "string (max 65536 characters)"
+    },
+    "clipboard_response": {
+      "success": "boolean",
+      "enabled": "boolean",
+      "text": "string",
+      "changed": "boolean"
     }
   }
 }

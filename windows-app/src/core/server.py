@@ -6,6 +6,7 @@ import os
 import sys
 import json
 import time
+import secrets
 import urllib.parse
 import hashlib
 import mimetypes
@@ -17,11 +18,12 @@ from typing import Dict, Any
 import qrcode
 from qrcode.image.svg import SvgPathImage
 
-from .config import load_config, save_config, get_local_ip
+from .config import load_config, save_config, get_local_ip, DEFAULT_DOWNLOAD_DIR
 from .security import SecurityManager
 from .history import HistoryManager
 from .transfer_engine import TransferEngine
 from .discovery import DiscoveryService
+from .clipboard import ClipboardSync, ClipboardError, MAX_CLIPBOARD_CHARS
 
 
 def create_pairing_qr_payload(host: str, port: int, device_id: str, pairing_token: str = "") -> str:
@@ -57,6 +59,7 @@ class SeamlessHandler(BaseHTTPRequestHandler):
     history: HistoryManager = None
     transfer: TransferEngine = None
     discovery: DiscoveryService = None
+    clipboard: ClipboardSync = None
     config: Dict[str, Any] = None
     renderer_dir: Path = None
 
@@ -132,6 +135,16 @@ class SeamlessHandler(BaseHTTPRequestHandler):
 
         if path == "/api/transfer/status":
             self._send_json(self.transfer.get_status())
+            return
+
+        if path == "/api/clipboard":
+            # Lets the phone pull the latest text copied on the laptop.
+            if not self._is_authorized_peer(self.headers.get("X-Seamless-Token", "")):
+                self._reject_unauthorized()
+                return
+            enabled = bool(self.config.get("clipboard_sync_enabled", True))
+            text = self.clipboard.current_text() if (enabled and self.clipboard) else ""
+            self._send_json({"success": True, "enabled": enabled, "text": text})
             return
 
         if path == "/api/history":
@@ -283,7 +296,7 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             return
 
         if path == "/api/settings/open_folder":
-            download_dir = self.config.get("download_dir", str(Path.home() / "Downloads" / "Seamless"))
+            download_dir = self.config.get("download_dir", str(DEFAULT_DOWNLOAD_DIR))
             try:
                 os.makedirs(download_dir, exist_ok=True)
                 os.startfile(download_dir)
@@ -296,11 +309,27 @@ class SeamlessHandler(BaseHTTPRequestHandler):
         if path == "/api/clipboard":
             body = self._read_json_body()
             text = body.get("text", "")
-            if text and self.config.get("clipboard_sync_enabled", True):
-                self._apply_windows_clipboard(text)
-                self._send_json({"success": True})
-            else:
-                self._send_json({"success": False}, 400)
+            if not self._is_authorized_peer(self.headers.get("X-Seamless-Token", "")):
+                self._reject_unauthorized()
+                return
+            if not isinstance(text, str):
+                self._send_json({"success": False, "error": "Clipboard text must be a string."}, 400)
+                return
+            if not self.config.get("clipboard_sync_enabled", True):
+                self._send_json({"success": False, "error": "Clipboard sync is switched off."}, 409)
+                return
+            if not text.strip():
+                self._send_json({"success": False, "error": "There is no text to copy."}, 400)
+                return
+            if len(text) > MAX_CLIPBOARD_CHARS:
+                self._send_json({"success": False, "error": "That text is too large to sync."}, 413)
+                return
+            try:
+                changed = self.clipboard.apply_remote_text(text)
+            except ClipboardError as e:
+                self._send_json({"success": False, "error": str(e)}, 503)
+                return
+            self._send_json({"success": True, "changed": changed})
             return
 
         self._send_json({"error": "Route not found"}, 404)
@@ -315,6 +344,30 @@ class SeamlessHandler(BaseHTTPRequestHandler):
                 pass
         return {}
 
+    def _is_authorized_peer(self, token: str) -> bool:
+        """
+        True when the supplied token belongs to a device that completed pairing.
+
+        Every device that pairs, whether by QR code or by PIN, is issued a token
+        that is stored with the device. Requests that carry that token are
+        allowed to send files and to exchange clipboard text. Requests without a
+        valid token are rejected so that other devices on the same network
+        cannot read the clipboard or drop files into the downloads folder.
+        """
+        if not token:
+            return False
+        for device in self.config.get("paired_devices", {}).values():
+            stored = str(device.get("token", ""))
+            if stored and secrets.compare_digest(stored, str(token)):
+                return True
+        return False
+
+    def _reject_unauthorized(self):
+        self._send_json({
+            "success": False,
+            "error": "This device is not paired with the laptop. Scan the QR code on the laptop to pair."
+        }, 401)
+
     def _handle_incoming_file_stream(self):
         """
         Receives binary file stream chunk-by-chunk with SHA-256 computation and progress tracking.
@@ -327,10 +380,14 @@ class SeamlessHandler(BaseHTTPRequestHandler):
         sender_name = self.headers.get("X-Seamless-Sender-Name", "Android Device")
         expected_sha = self.headers.get("X-Seamless-SHA256", "").lower()
 
+        if not self._is_authorized_peer(self.headers.get("X-Seamless-Token", "")):
+            self._reject_unauthorized()
+            return
+
         if not filename:
             filename = f"seamless_file_{int(time.time())}.bin"
 
-        download_dir = self.config.get("download_dir", str(Path.home() / "Downloads" / "Seamless"))
+        download_dir = self.config.get("download_dir", str(DEFAULT_DOWNLOAD_DIR))
         target_path = SecurityManager.get_safe_destination_path(download_dir, filename)
 
         transfer_id = f"tx_{int(time.time() * 1000)}"
@@ -413,6 +470,11 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             file_path = android_dir / "mobile-app.js"
         elif path == "/manifest.json":
             file_path = android_dir / "manifest.json"
+        elif path in ("/icon.png", "/mobile/icon.png"):
+            # The Seamless mark used by the mobile page and its web manifest.
+            file_path = android_dir / "icon.png"
+        elif path in ("/icon-512.png", "/mobile/icon-512.png"):
+            file_path = android_dir / "icon-512.png"
         else:
             if path in ("", "/"):
                 path = "/index.html"
@@ -446,11 +508,10 @@ class SeamlessHandler(BaseHTTPRequestHandler):
             self.end_headers()
 
     def _apply_windows_clipboard(self, text: str):
+        """Kept for backwards compatibility with older callers."""
         try:
-            import subprocess
-            cmd = f'Set-Clipboard -Value "{text.replace('"', '`"')}"'
-            subprocess.run(["powershell", "-NoProfile", "-Command", cmd], check=False, timeout=2)
-        except Exception as e:
+            self.clipboard.apply_remote_text(text)
+        except ClipboardError as e:
             print(f"[Clipboard] Sync error: {e}")
 
 
@@ -461,6 +522,7 @@ def run_server(port: int = 5173, renderer_dir: Path = None):
     history = HistoryManager()
     transfer = TransferEngine(history)
     discovery = DiscoveryService(config)
+    clipboard = ClipboardSync()
 
     # Start discovery
     discovery.start()
@@ -470,12 +532,14 @@ def run_server(port: int = 5173, renderer_dir: Path = None):
     SeamlessHandler.history = history
     SeamlessHandler.transfer = transfer
     SeamlessHandler.discovery = discovery
+    SeamlessHandler.clipboard = clipboard
     SeamlessHandler.config = config
     SeamlessHandler.renderer_dir = renderer_dir
 
     ThreadingHTTPServer.allow_reuse_address = True
     server = ThreadingHTTPServer(("0.0.0.0", port), SeamlessHandler)
     server.security = security
+    server.clipboard = clipboard
     server.config = config
     local_ip = get_local_ip()
     print(f"\n=======================================================")

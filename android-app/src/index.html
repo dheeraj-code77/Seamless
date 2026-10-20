@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Seamless — Mobile</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" href="icon.png">
+  <link rel="apple-touch-icon" href="icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -81,9 +83,20 @@
       background-color: #FAF8F3;
       border: 1px solid rgba(0, 0, 0, 0.06);
     }
+
+    /* Respect display cutouts and gesture bars when the system allows the app
+       to draw behind them. Normally these resolve to 0 because the activity
+       is not laid out edge to edge. */
+    .safe-top {
+      padding-top: env(safe-area-inset-top, 0px);
+    }
+
+    .safe-bottom {
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
   </style>
 </head>
-<body class="p-2 sm:p-4 font-sans antialiased selection:bg-[#456F5B] selection:text-white flex justify-center items-start min-h-screen">
+<body class="font-sans antialiased selection:bg-[#456F5B] selection:text-white min-h-[100dvh]">
 
   <div class="grain-overlay"></div>
 
@@ -91,21 +104,11 @@
   <input type="file" id="mobile-file-input" class="hidden" multiple onchange="handleMobileFileSelected(event)">
   <input type="file" id="mobile-photo-input" class="hidden" accept="image/*,video/*" multiple onchange="handleMobileFileSelected(event)">
 
-  <!-- Android Phone Viewport Container -->
-  <div class="w-full max-w-[420px] rounded-[36px] bg-[#FAF8F3] overflow-hidden flex flex-col min-h-[660px] text-forest-text relative border-2 border-[#D5CFC2] shadow-2xl">
-    
-    <!-- Status Bar -->
-    <div class="px-6 pt-3 pb-2 flex items-center justify-between text-[11px] font-bold text-[#2E3A30] select-none bg-[#FAF8F3]">
-      <span id="mobile-clock">17:15</span>
-      <div class="w-3 h-3 rounded-full bg-forest-dark"></div>
-      <div class="flex items-center gap-1.5">
-        <i data-lucide="wifi" class="w-3 h-3"></i>
-        <i data-lucide="battery" class="w-3.5 h-3.5"></i>
-      </div>
-    </div>
+  <!-- Application Shell: fills the real Android app window -->
+  <div id="app-shell" class="w-full flex flex-col min-h-[100dvh] text-forest-text relative">
 
     <!-- App Header -->
-    <div class="px-5 py-3 flex items-center justify-between border-b border-[#EAE6DC] bg-[#FAF8F3]">
+    <div class="safe-top px-5 py-3 flex items-center justify-between border-b border-[#EAE6DC] bg-[#FAF8F3]">
       <div class="flex items-center gap-2">
         <div class="w-7 h-7 rounded-lg bg-forest-accent flex items-center justify-center shadow-xs">
           <i data-lucide="zap" class="w-4 h-4 text-white"></i>
@@ -113,13 +116,13 @@
         <span class="text-sm font-bold tracking-tight">Seamless</span>
         <span class="text-[9px] px-1.5 py-0.2 rounded-full bg-moss-badge text-[#23421C] font-semibold" id="mobile-conn-tag">Local Wi-Fi</span>
       </div>
-      <button onclick="openMobilePairingModal()" class="w-8 h-8 rounded-lg clean-inner-card flex items-center justify-center text-forest-accent shadow-xs" title="Pair with Laptop">
-        <i data-lucide="qr-code" class="w-4 h-4"></i>
+      <button onclick="startQrScan()" class="w-8 h-8 rounded-lg clean-inner-card flex items-center justify-center text-forest-accent shadow-xs" title="Scan pairing QR code">
+        <i data-lucide="scan-line" class="w-4 h-4"></i>
       </button>
     </div>
 
     <!-- Scrollable Content -->
-    <div class="flex-1 p-4 space-y-3.5 overflow-y-auto">
+    <div class="flex-1 p-4 space-y-3.5 pb-2">
       
       <!-- Connected Laptop Hero Card in Olive Moss Green -->
       <div class="p-4 rounded-2xl bg-moss-olive text-moss-text shadow-sm relative overflow-hidden" id="laptop-hero-card">
@@ -139,8 +142,17 @@
           <span class="text-[10px] text-[#183119] font-semibold bg-[#7E9665]/30 px-2 py-0.5 rounded-full" id="target-pc-ip">Wi-Fi</span>
         </div>
 
+        <!-- Scan QR to pair with this laptop -->
+        <button onclick="startQrScan()" class="w-full mt-1 flex items-center justify-center gap-2 py-2.5 rounded-xl font-semibold text-xs shadow-sm transition hover:opacity-95 active:scale-95" style="background-color: #174D58; color: #FFFFFF;">
+          <i data-lucide="scan-line" class="w-4 h-4 text-white"></i>
+          <span class="font-bold">Scan QR Code</span>
+        </button>
+        <button onclick="openMobilePairingModal()" class="w-full mt-1.5 text-[10px] font-semibold text-[#183119]/80 hover:underline">
+          Enter a pairing PIN instead
+        </button>
+
         <!-- Android Quick Actions -->
-        <div class="grid grid-cols-2 gap-2 mt-2">
+        <div class="grid grid-cols-2 gap-2 mt-3">
           <!-- Send Files button in #456F5B (muted forest green) with clear white text -->
           <button onclick="triggerFilePick('doc')" class="p-2.5 rounded-xl font-semibold text-xs flex flex-col items-center justify-center gap-1 shadow-sm transition hover:opacity-95 active:scale-95" style="background-color: #456F5B; color: #FFFFFF;">
             <i data-lucide="send" class="w-4 h-4 text-white"></i>
@@ -205,9 +217,9 @@
     </div>
 
     <!-- Mobile Bottom Navigation -->
-    <div class="p-2.5 bg-[#FAF8F3] border-t border-[#EAE6DC] flex items-center justify-around text-xs">
-      <button class="px-3 py-1 rounded-full bg-forest-accent text-white font-semibold flex items-center gap-1.5 shadow-xs">
-        <i data-lucide="radio" class="w-3.5 h-3.5"></i>
+    <div class="safe-bottom sticky bottom-0 z-20 p-2.5 bg-[#FAF8F3] border-t border-[#EAE6DC] flex items-center justify-around text-xs">
+      <button onclick="startQrScan()" class="px-3 py-1 rounded-full bg-forest-accent text-white font-semibold flex items-center gap-1.5 shadow-xs">
+        <i data-lucide="scan-line" class="w-3.5 h-3.5"></i>
         <span class="text-[10px]">Connect</span>
       </button>
       <button onclick="triggerFilePick('doc')" class="flex flex-col items-center gap-0.5 text-[#5C665D] hover:text-forest-text">
@@ -219,9 +231,6 @@
         <span class="text-[9px]">History</span>
       </button>
     </div>
-    
-    <!-- Gesture Bar -->
-    <div class="w-20 h-1 bg-[#2E3A30] rounded-full mx-auto my-1.5"></div>
   </div>
 
   <!-- MOBILE PAIRING MODAL -->

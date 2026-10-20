@@ -27,6 +27,7 @@ from core.security import SecurityManager
 from core.history import HistoryManager
 from core.transfer_engine import TransferEngine
 from core.config import get_local_ip
+from core.clipboard import ClipboardSync, read_clipboard_text, write_clipboard_text
 from core.server import (
     create_pairing_qr_payload,
     create_pairing_qr_svg,
@@ -56,6 +57,66 @@ def test_pairing_token_lifecycle():
         "Too many pairing tokens would keep stale codes alive"
 
     print("  -> QR pairing token lifecycle passed!")
+
+
+def test_default_transfer_folder_migration():
+    print("[Test] Running default transfer folder migration tests...")
+    from core.config import (
+        _migrate_default_download_dir,
+        get_desktop_dir,
+        DEFAULT_DOWNLOAD_DIR,
+        LEGACY_DEFAULT_DOWNLOAD_DIR,
+        TRANSFER_FOLDER_NAME,
+    )
+
+    # Received files land in a "Seamless Transfer" folder on the real Desktop.
+    assert DEFAULT_DOWNLOAD_DIR.name == TRANSFER_FOLDER_NAME, \
+        "The transfer folder should be named after the app"
+    assert DEFAULT_DOWNLOAD_DIR.parent == get_desktop_dir(), \
+        "The transfer folder should sit on the Desktop"
+
+    # An install that never changed the location moves to the current default.
+    migrated = _migrate_default_download_dir(
+        {"download_dir": str(LEGACY_DEFAULT_DOWNLOAD_DIR)})
+    assert migrated["download_dir"] == str(DEFAULT_DOWNLOAD_DIR), \
+        "An untouched default location must move to the current default"
+
+    # A location the user picked is never overwritten.
+    chosen = str(Path.home() / "Documents" / "Chosen")
+    kept = _migrate_default_download_dir({"download_dir": chosen})
+    assert kept["download_dir"] == chosen, \
+        "A folder the user chose must be preserved"
+
+    # The current default stays exactly where it is.
+    unchanged = _migrate_default_download_dir(
+        {"download_dir": str(DEFAULT_DOWNLOAD_DIR)})
+    assert unchanged["download_dir"] == str(DEFAULT_DOWNLOAD_DIR), \
+        "The current default must not move"
+
+    print("  -> Default transfer folder migration passed!")
+
+
+def test_clipboard_sync():
+    print("[Test] Running ClipboardSync tests...")
+    original = read_clipboard_text()
+    try:
+        # 1. Windows clipboard read/write round trip
+        write_clipboard_text("Seamless clipboard probe")
+        assert read_clipboard_text() == "Seamless clipboard probe", \
+            "The clipboard did not return the text that was written"
+
+        # 2. The loop guard must not push the same text back and forth
+        sync = ClipboardSync()
+        sync._last_text = "Seamless clipboard probe"
+        assert sync.apply_remote_text("Seamless clipboard probe") is False, \
+            "A repeated clipboard payload must not be written again"
+        assert sync.apply_remote_text("A different value") is True
+        assert sync.apply_remote_text("A different value") is False
+    finally:
+        if original:
+            write_clipboard_text(original)
+
+    print("  -> ClipboardSync passed!")
 
 
 def test_security_manager():
@@ -209,7 +270,82 @@ def test_server_api_and_file_transfer():
         except urllib.error.HTTPError as e:
             assert e.code == 401, f"Expected 401 for an invalid token, got {e.code}"
 
-        # 2b. A phone that paired by QR can send files straight away.
+        # 2b. Clipboard sync over the HTTP API
+        original_clipboard = read_clipboard_text()
+        try:
+            # An unpaired device must not be able to read the laptop clipboard.
+            unauth_req = urllib.request.Request(f"{base_url}/api/clipboard")
+            try:
+                urllib.request.urlopen(unauth_req)
+                raise AssertionError("An unpaired device must not read the clipboard")
+            except urllib.error.HTTPError as e:
+                assert e.code == 401, f"Expected 401 without a token, got {e.code}"
+
+            clip_headers = {"Content-Type": "application/json", "X-Seamless-Token": qr_auth_token}
+            clip_payload = json.dumps({"text": "Seamless API clipboard probe"}).encode()
+            clip_req = urllib.request.Request(
+                f"{base_url}/api/clipboard", method="POST",
+                data=clip_payload, headers=clip_headers)
+            clip_res = json.loads(urllib.request.urlopen(clip_req).read().decode())
+            assert clip_res["success"] is True, "The clipboard endpoint should accept text"
+            assert clip_res["changed"] is True
+
+            # The phone can pull the same text back from the laptop.
+            pull_req = urllib.request.Request(
+                f"{base_url}/api/clipboard", headers={"X-Seamless-Token": qr_auth_token})
+            with urllib.request.urlopen(pull_req) as response:
+                clip_get = json.loads(response.read().decode())
+            assert clip_get["enabled"] is True
+            assert clip_get["text"] == "Seamless API clipboard probe", \
+                "The laptop should return the clipboard text it received"
+
+            # Sending the same text again must not be treated as a change, which
+            # is what stops the two devices from looping on each other.
+            clip_res = json.loads(urllib.request.urlopen(clip_req).read().decode())
+            assert clip_res["success"] is True
+            assert clip_res["changed"] is False, "A repeated clipboard payload must not loop"
+
+            # An oversized payload is rejected rather than silently truncated.
+            huge_req = urllib.request.Request(
+                f"{base_url}/api/clipboard", method="POST",
+                data=json.dumps({"text": "x" * 200000}).encode(),
+                headers=clip_headers)
+            try:
+                urllib.request.urlopen(huge_req)
+                raise AssertionError("An oversized clipboard payload must be rejected")
+            except urllib.error.HTTPError as e:
+                assert e.code == 413, f"Expected 413 for an oversized payload, got {e.code}"
+
+            # Empty payloads are rejected.
+            empty_req = urllib.request.Request(
+                f"{base_url}/api/clipboard", method="POST",
+                data=json.dumps({"text": "   "}).encode(),
+                headers=clip_headers)
+            try:
+                urllib.request.urlopen(empty_req)
+                raise AssertionError("An empty clipboard payload must be rejected")
+            except urllib.error.HTTPError as e:
+                assert e.code == 400, f"Expected 400 for an empty payload, got {e.code}"
+        finally:
+            if original_clipboard:
+                write_clipboard_text(original_clipboard)
+
+        # 2c. An unpaired device must not be able to drop files on the laptop.
+        rogue_headers = {
+            "X-Seamless-Filename": "rogue.bin",
+            "X-Seamless-Filesize": "4",
+            "X-Seamless-Sender-Id": "rogue",
+            "X-Seamless-Token": "not-a-real-token"
+        }
+        rogue_req = urllib.request.Request(
+            f"{base_url}/api/transfer/send", method="POST", data=b"test", headers=rogue_headers)
+        try:
+            urllib.request.urlopen(rogue_req)
+            raise AssertionError("An unpaired device must not be able to send files")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Expected 401 for an unpaired upload, got {e.code}"
+
+        # 2d. A phone that paired by QR can send files straight away.
         qr_payload_bytes = b"Seamless QR paired transfer payload" * 2048
         qr_sha = hashlib.sha256(qr_payload_bytes).hexdigest()
         qr_headers = {
@@ -279,6 +415,8 @@ def test_server_api_and_file_transfer():
 if __name__ == "__main__":
     test_security_manager()
     test_pairing_token_lifecycle()
+    test_default_transfer_folder_migration()
+    test_clipboard_sync()
     test_transfer_engine_and_history()
     test_server_api_and_file_transfer()
     print("\n[SUCCESS] ALL WINDOWS CORE TESTS PASSED PERFECTLY!\n")

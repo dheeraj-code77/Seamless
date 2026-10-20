@@ -1,1 +1,7 @@
 qrcode==8.2
+
+# Used by the Windows client for QR rendering and by tools/make_icons.py.
+Pillow>=10.0
+
+# Needed to build the standalone executable.
+PyInstaller>=6.0

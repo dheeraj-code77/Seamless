@@ -25,5 +25,7 @@ keystore.properties
 # Superseded local artifact (replaced by dist/Seamless.apk)
 dist/Seamless-Android.apk
 
-# Local screenshots
+# Local images used for testing and personal screenshots
+/*.jpg
+/*.jpeg
 WhatsApp Image *.jpeg

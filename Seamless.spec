@@ -23,6 +23,7 @@ exe = EXE(
     a.datas,
     [],
     name='Seamless',
+    icon='assets/seamless.ico',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

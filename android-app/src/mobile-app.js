@@ -6,21 +6,17 @@ if (savedLaptopPort) laptopPort = savedLaptopPort;
 let authToken = localStorage.getItem("seamless_token") || "";
 let pairedPcName = localStorage.getItem("seamless_pc_name") || "Windows Laptop";
 let mobileHistory = JSON.parse(localStorage.getItem("seamless_mobile_history") || "[]");
+// Clipboard sync state. The phone can only read the Android clipboard while it
+// is in the foreground, and only while the app holds focus. That is a platform
+// restriction, so the sync runs on a timer that pauses when the app is hidden.
+let clipboardSyncEnabled = localStorage.getItem("seamless_clipboard_enabled") !== "false";
+let lastSentToLaptop = "";
+let lastAppliedFromLaptop = "";
 
 document.addEventListener("DOMContentLoaded", () => {
   if (window.lucide) lucide.createIcons();
-  updateClock();
-  setInterval(updateClock, 1000);
   initMobileApp();
 });
-
-function updateClock() {
-  const now = new Date();
-  const hrs = String(now.getHours()).padStart(2, '0');
-  const mins = String(now.getMinutes()).padStart(2, '0');
-  const clock = document.getElementById("mobile-clock");
-  if (clock) clock.innerText = `${hrs}:${mins}`;
-}
 
 async function initMobileApp() {
   // If user entered a manual IP in localStorage, use it
@@ -33,6 +29,7 @@ async function initMobileApp() {
   await checkLaptopConnection();
   renderMobileHistory();
   setInterval(checkLaptopConnection, 4000);
+  setInterval(runClipboardSync, 2000);
 }
 
 // 1. Check Connection to Windows Laptop
@@ -50,6 +47,14 @@ async function checkLaptopConnection() {
       document.getElementById("mobile-conn-tag").className = "text-[9px] px-1.5 py-0.2 rounded-full bg-moss-badge text-[#23421C] font-semibold";
       pairedPcName = data.device_name;
       localStorage.setItem("seamless_pc_name", pairedPcName);
+      // Reflect the clipboard state the laptop is actually running, rather
+      // than whatever the phone last asked for.
+      if (typeof data.clipboard_sync === "boolean") {
+        clipboardSyncEnabled = data.clipboard_sync;
+        localStorage.setItem("seamless_clipboard_enabled", clipboardSyncEnabled ? "true" : "false");
+        const toggle = document.getElementById("mobileClipboardToggle");
+        if (toggle) toggle.checked = clipboardSyncEnabled;
+      }
       return true;
     }
   } catch (err) {
@@ -352,8 +357,84 @@ function refreshMobileHistory() {
 }
 
 // 5. Clipboard Sync
-function toggleMobileClipboard(checkbox) {
-  showMobileToast(checkbox.checked ? "Clipboard Sync enabled on phone." : "Clipboard Sync paused.");
+function nativeBridge() {
+  return (window.SeamlessAndroid && typeof window.SeamlessAndroid.startQrScan === "function")
+    ? window.SeamlessAndroid
+    : null;
+}
+
+// Opens the native portrait QR scanner. Falls back to manual pairing when the
+// page is opened in a desktop browser, where there is no camera bridge.
+function startQrScan() {
+  const bridge = nativeBridge();
+  if (bridge) {
+    bridge.startQrScan();
+    return;
+  }
+  showMobileToast("Open the Seamless Android app to scan a QR code.");
+  openMobilePairingModal();
+}
+
+async function toggleMobileClipboard(checkbox) {
+  const enabled = checkbox.checked;
+  try {
+    const res = await fetch(`http://${laptopIp}:${laptopPort}/api/settings/clipboard`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ enabled: enabled })
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    clipboardSyncEnabled = enabled;
+    localStorage.setItem("seamless_clipboard_enabled", enabled ? "true" : "false");
+    showMobileToast(enabled ? "Clipboard sync is on." : "Clipboard sync is paused.");
+  } catch (err) {
+    // The laptop did not confirm the change, so do not report success.
+    checkbox.checked = !enabled;
+    showMobileToast("Could not reach the laptop. Clipboard sync is unchanged.");
+  }
+}
+
+async function runClipboardSync() {
+  if (!clipboardSyncEnabled) return;
+  if (document.visibilityState !== "visible") return;
+  const bridge = nativeBridge();
+  if (!bridge) return;
+
+  try {
+    // Phone -> laptop
+    const localText = bridge.getClipboard() || "";
+    if (localText && localText !== lastSentToLaptop && localText !== lastAppliedFromLaptop) {
+      const res = await fetch(`http://${laptopIp}:${laptopPort}/api/clipboard`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Seamless-Token": authToken
+        },
+        body: JSON.stringify({ text: localText })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          lastSentToLaptop = localText;
+        }
+      }
+    }
+
+    // Laptop -> phone
+    const pull = await fetch(`http://${laptopIp}:${laptopPort}/api/clipboard`, {
+      headers: { "X-Seamless-Token": authToken },
+      signal: AbortSignal.timeout(3000)
+    });
+    if (!pull.ok) return;
+    const data = await pull.json();
+    if (!data.success || !data.enabled || !data.text) return;
+    if (data.text === lastAppliedFromLaptop || data.text === lastSentToLaptop) return;
+    lastAppliedFromLaptop = data.text;
+    bridge.setClipboard(data.text);
+    showMobileToast("Clipboard updated from the laptop.");
+  } catch (err) {
+    // The laptop may be asleep or off the network. The next tick retries.
+  }
 }
 
 // 6. Toast

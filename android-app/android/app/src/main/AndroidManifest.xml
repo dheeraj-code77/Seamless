@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     package="com.seamless.app">
 
     <uses-permission android:name="android.permission.INTERNET" />
@@ -31,6 +32,15 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- The barcode scanner library declares this activity as landscape.
+             Seamless scans a QR code held up in portrait, so the orientation is
+             overridden here to keep the camera preview upright. -->
+        <activity
+            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+            android:screenOrientation="portrait"
+            android:stateNotNeeded="true"
+            tools:replace="android:screenOrientation" />
     </application>
 
 </manifest>

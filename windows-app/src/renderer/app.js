@@ -440,13 +440,13 @@ async function openDownloadFolder() {
     const res = await fetch("/api/settings/open_folder", { method: "POST" });
     const data = await res.json();
     if (data.success) {
-      showToast(`Downloads opened: ${data.download_dir || currentConfig?.download_dir || ""}`);
+      showToast(`Transfer folder opened: ${data.download_dir || currentConfig?.download_dir || ""}`);
     } else {
-      showToast(data.error || "Could not open the downloads folder.");
+      showToast(data.error || "Could not open the transfer folder.");
     }
   } catch (err) {
     console.error(err);
-    showToast(`Downloads are stored at: ${currentConfig?.download_dir || ""}`);
+    showToast(`Files are stored at: ${currentConfig?.download_dir || ""}`);
   }
 }
 

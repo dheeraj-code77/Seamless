@@ -1,7 +1,11 @@
 """
 Seamless Full End-to-End (E2E) Test Suite
 Tests dist/Seamless.exe directly: HTTP routes, Static UI, Pairing Handshake,
-Chunked File Streaming with SHA-256 verification, Clipboard Sync, and Security defenses.
+QR pairing, Chunked File Streaming with SHA-256 verification, Clipboard Sync,
+and Security defenses.
+
+Run with:
+    python tests/test_e2e_full.py
 """
 import os
 import sys
@@ -13,8 +17,10 @@ import urllib.error
 import subprocess
 from pathlib import Path
 
-EXE_PATH = Path(r"C:\Users\dheer\Desktop\SEAMLESS\dist\Seamless.exe")
+REPO_ROOT = Path(__file__).resolve().parent.parent
+EXE_PATH = REPO_ROOT / "dist" / "Seamless.exe"
 BASE_URL = "http://127.0.0.1:5173"
+SRC_DIR = REPO_ROOT / "windows-app" / "src"
 
 
 def log(section, msg):
@@ -127,6 +133,43 @@ def main():
             log("TEST 3", f"PASS: Pixel 8 Pro successfully paired with Windows laptop.\n")
 
         # ----------------------------------------------------
+        # TEST 3b: QR Pairing (the code shown on screen)
+        # ----------------------------------------------------
+        log("TEST 3b", "Verifying the pairing QR code endpoint...")
+        with urllib.request.urlopen(f"{BASE_URL}/api/pair/qr") as resp:
+            assert resp.status == 200
+            assert resp.headers.get_content_type() == "image/svg+xml"
+            qr_svg = resp.read().decode("utf-8")
+            assert "<svg" in qr_svg and "<path" in qr_svg
+        log("TEST 3b", "  -> QR code served as SVG (200 OK).")
+
+        # Every render issues a fresh short lived token, so two consecutive
+        # codes must differ.
+        with urllib.request.urlopen(f"{BASE_URL}/api/pair/qr") as resp:
+            qr_svg_2 = resp.read().decode("utf-8")
+        assert qr_svg != qr_svg_2, "Each QR render must carry a fresh pairing token"
+        log("TEST 3b", "  -> Each render carries a fresh single-use token.")
+
+        # A bogus token must be rejected.
+        exchange_body = json.dumps({
+            "pairing_token": "not-a-real-token",
+            "device_id": "android_rogue_e2e",
+            "device_name": "Rogue Device"
+        }).encode("utf-8")
+        req = urllib.request.Request(
+            f"{BASE_URL}/api/pair/exchange",
+            data=exchange_body,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        try:
+            urllib.request.urlopen(req)
+            raise AssertionError("An invalid pairing token must be rejected")
+        except urllib.error.HTTPError as e:
+            assert e.code == 401, f"Expected 401 for an invalid token, got {e.code}"
+        log("TEST 3b", "PASS: QR pairing endpoint issues and validates single-use tokens.\n")
+
+        # ----------------------------------------------------
         # TEST 4: Real Android-to-Windows File Transfer with SHA-256
         # ----------------------------------------------------
         log("TEST 4", "Simulating real Android-to-Windows file transfer...")
@@ -189,23 +232,51 @@ def main():
         # TEST 5: Real Clipboard Synchronization
         # ----------------------------------------------------
         log("TEST 5", "Testing clipboard sync endpoint (/api/clipboard)...")
-        clip_text = "Seamless verification payload: 123-ABC"
-        clip_body = json.dumps({
-            "text": clip_text,
-            "sender_id": phone_id,
-            "token": auth_token
-        }).encode("utf-8")
+        sys.path.insert(0, str(SRC_DIR))
+        from core.clipboard import read_clipboard_text, write_clipboard_text
 
-        req = urllib.request.Request(
-            f"{BASE_URL}/api/clipboard",
-            data=clip_body,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req) as resp:
-            clip_res = json.loads(resp.read().decode())
-            assert clip_res["success"] is True
-            log("TEST 5", f"PASS: Clipboard sync payload processed successfully.\n")
+        original_clipboard = read_clipboard_text()
+        try:
+            # An unpaired device must not be able to read the laptop clipboard.
+            try:
+                urllib.request.urlopen(f"{BASE_URL}/api/clipboard", timeout=5)
+                raise AssertionError("An unpaired device must not read the clipboard")
+            except urllib.error.HTTPError as e:
+                assert e.code == 401, f"Expected 401 without a token, got {e.code}"
+            log("TEST 5", "  -> Unpaired clipboard read correctly rejected with 401.")
+
+            clip_text = "Seamless verification payload: 123-ABC"
+            clip_body = json.dumps({"text": clip_text}).encode("utf-8")
+
+            req = urllib.request.Request(
+                f"{BASE_URL}/api/clipboard",
+                data=clip_body,
+                headers={
+                    "Content-Type": "application/json",
+                    "X-Seamless-Token": auth_token
+                },
+                method="POST"
+            )
+            with urllib.request.urlopen(req) as resp:
+                clip_res = json.loads(resp.read().decode())
+                assert clip_res["success"] is True
+                assert clip_res["changed"] is True
+
+            # The phone pulls the text back from the laptop.
+            pull_req = urllib.request.Request(
+                f"{BASE_URL}/api/clipboard", headers={"X-Seamless-Token": auth_token})
+            with urllib.request.urlopen(pull_req) as resp:
+                clip_get = json.loads(resp.read().decode())
+            assert clip_get["text"] == clip_text, "The laptop should return the synced text"
+
+            # The same text again must not be treated as a new event.
+            with urllib.request.urlopen(req) as resp:
+                repeat = json.loads(resp.read().decode())
+            assert repeat["changed"] is False, "A repeated payload must not loop"
+            log("TEST 5", "PASS: Clipboard sync works in both directions and does not loop.\n")
+        finally:
+            if original_clipboard:
+                write_clipboard_text(original_clipboard)
 
         # ----------------------------------------------------
         # TEST 6: Security & Path Traversal Attack Defense
@@ -235,6 +306,24 @@ def main():
             if saved_attack_path.exists():
                 saved_attack_path.unlink()
         log("TEST 6", "PASS: Path traversal attacks are neutralized.\n")
+
+        # ----------------------------------------------------
+        # TEST 7: Cleanup
+        # ----------------------------------------------------
+        log("TEST 7", "Removing the test device from the paired list...")
+        cleanup = json.dumps({"device_id": phone_id}).encode("utf-8")
+        req = urllib.request.Request(
+            f"{BASE_URL}/api/pair/unpair",
+            data=cleanup,
+            headers={"Content-Type": "application/json"},
+            method="POST"
+        )
+        with urllib.request.urlopen(req) as resp:
+            assert json.loads(resp.read().decode())["success"] is True
+        with urllib.request.urlopen(f"{BASE_URL}/api/devices") as resp:
+            devices = json.loads(resp.read().decode())
+            assert phone_id not in devices["paired"]
+        log("TEST 7", "PASS: Test device removed from the paired list.\n")
 
         print("=" * 65)
         print(" [ALL E2E VERIFICATION TESTS PASSED SUCCESSFULLY] ")

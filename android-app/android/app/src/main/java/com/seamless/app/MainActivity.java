@@ -1,21 +1,26 @@
 package com.seamless.app;
 
+import android.Manifest;
 import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.content.Context;
 import android.content.Intent;
-import android.content.res.ColorStateList;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
 
@@ -34,9 +39,11 @@ import java.net.URL;
 
 public class MainActivity extends Activity {
     private WebView webView;
-    private TextView pairingStatus;
+    private TextView statusStrip;
     private ValueCallback<Uri[]> uploadMessage;
     private static final int FILE_CHOOSER_RESULT_CODE = 1001;
+    private static final int CAMERA_PERMISSION_REQUEST_CODE = 2001;
+    private static final int MAX_CLIPBOARD_CHARS = 65536;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @Override
@@ -47,29 +54,16 @@ public class MainActivity extends Activity {
         appLayout.setOrientation(LinearLayout.VERTICAL);
         appLayout.setBackgroundColor(Color.parseColor("#ECE7DD"));
 
-        TextView heading = new TextView(this);
-        heading.setText("Connect to Windows");
-        heading.setTextColor(Color.parseColor("#1A231C"));
-        heading.setTextSize(18);
-        heading.setPadding(dp(16), dp(12), dp(16), dp(2));
-        appLayout.addView(heading);
-
-        pairingStatus = new TextView(this);
-        pairingStatus.setText("Scan the QR code shown in the Windows Seamless app.");
-        pairingStatus.setTextColor(Color.parseColor("#687469"));
-        pairingStatus.setTextSize(13);
-        pairingStatus.setPadding(dp(16), dp(2), dp(16), dp(8));
-        appLayout.addView(pairingStatus);
-
-        Button scanButton = new Button(this);
-        scanButton.setText("Scan QR Code");
-        scanButton.setTextColor(Color.WHITE);
-        scanButton.setBackgroundTintList(ColorStateList.valueOf(Color.parseColor("#456F5B")));
-        scanButton.setOnClickListener(view -> startQrScan());
-        LinearLayout.LayoutParams buttonParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        buttonParams.setMargins(dp(16), 0, dp(16), dp(8));
-        appLayout.addView(scanButton, buttonParams);
+        // A slim strip for pairing progress and errors. It stays hidden until
+        // there is something worth showing, so the app fills the screen.
+        statusStrip = new TextView(this);
+        statusStrip.setTextColor(Color.parseColor("#1A231C"));
+        statusStrip.setTextSize(13);
+        statusStrip.setPadding(dp(16), dp(10), dp(16), dp(10));
+        statusStrip.setBackgroundColor(Color.parseColor("#FAF8F3"));
+        statusStrip.setVisibility(View.GONE);
+        appLayout.addView(statusStrip, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         webView = new WebView(this);
         appLayout.addView(webView, new LinearLayout.LayoutParams(
@@ -91,7 +85,22 @@ public class MainActivity extends Activity {
         webView.addJavascriptInterface(new Object() {
             @android.webkit.JavascriptInterface
             public void pairingCompleted(String deviceName) {
-                mainHandler.post(() -> pairingStatus.setText("Paired with " + deviceName + "."));
+                mainHandler.post(() -> showStatus("Paired with " + deviceName + "."));
+            }
+
+            @android.webkit.JavascriptInterface
+            public void startQrScan() {
+                mainHandler.post(MainActivity.this::requestScan);
+            }
+
+            @android.webkit.JavascriptInterface
+            public String getClipboard() {
+                return readClipboardText();
+            }
+
+            @android.webkit.JavascriptInterface
+            public void setClipboard(String text) {
+                mainHandler.post(() -> writeClipboardText(text));
             }
         }, "SeamlessAndroid");
         webView.setWebChromeClient(new WebChromeClient() {
@@ -122,16 +131,101 @@ public class MainActivity extends Activity {
         return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    private void startQrScan() {
+    /** Shows a short message above the app, or hides the strip when given null. */
+    private void showStatus(String message) {
+        if (message == null || message.trim().isEmpty()) {
+            statusStrip.setVisibility(View.GONE);
+            return;
+        }
+        statusStrip.setText(message);
+        statusStrip.setVisibility(View.VISIBLE);
+    }
+
+    // Camera permission and the QR scanner
+
+    private void requestScan() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+            showStatus("Camera access is needed to scan the pairing QR code.");
+            requestPermissions(new String[]{Manifest.permission.CAMERA}, CAMERA_PERMISSION_REQUEST_CODE);
+            return;
+        }
+        launchScanner();
+    }
+
+    private void launchScanner() {
         try {
             new IntentIntegrator(this)
                     .setDesiredBarcodeFormats(IntentIntegrator.QR_CODE)
                     .setPrompt("Scan the QR code shown in the Windows Seamless app")
                     .setBeepEnabled(false)
-                    .setOrientationLocked(false)
+                    .setOrientationLocked(true)
                     .initiateScan();
         } catch (Exception e) {
-            pairingStatus.setText("Could not open the camera scanner. Check camera permission and try again.");
+            showStatus("Could not open the camera scanner. Check camera permission and try again.");
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != CAMERA_PERMISSION_REQUEST_CODE) {
+            return;
+        }
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            showStatus("");
+            launchScanner();
+        } else {
+            showCameraDeniedMessage();
+        }
+    }
+
+    private void showCameraDeniedMessage() {
+        new AlertDialog.Builder(this)
+                .setTitle("Camera access needed")
+                .setMessage("Seamless uses the camera only to read the pairing QR code on your laptop. "
+                        + "Allow camera access to scan it, or enter the pairing PIN manually instead.")
+                .setPositiveButton("Try again", (dialog, which) -> requestScan())
+                .setNegativeButton("Enter PIN instead", (dialog, which) -> {
+                    showStatus("");
+                    webView.evaluateJavascript("openMobilePairingModal()", null);
+                })
+                .show();
+    }
+
+    // Clipboard access
+
+    private String readClipboardText() {
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard == null || !clipboard.hasPrimaryClip()) {
+                return "";
+            }
+            ClipData clip = clipboard.getPrimaryClip();
+            if (clip == null || clip.getItemCount() == 0) {
+                return "";
+            }
+            CharSequence text = clip.getItemAt(0).getText();
+            if (text == null || text.length() > MAX_CLIPBOARD_CHARS) {
+                return "";
+            }
+            return text.toString();
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    private void writeClipboardText(String text) {
+        if (text == null || text.isEmpty() || text.length() > MAX_CLIPBOARD_CHARS) {
+            return;
+        }
+        try {
+            ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+            if (clipboard != null) {
+                clipboard.setPrimaryClip(ClipData.newPlainText("Seamless clipboard", text));
+            }
+        } catch (Exception e) {
+            // Nothing to do here; the next sync attempt tries again.
         }
     }
 
@@ -141,7 +235,7 @@ public class MainActivity extends Activity {
         IntentResult scanResult = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
         if (scanResult != null) {
             if (scanResult.getContents() == null) {
-                pairingStatus.setText("QR scan cancelled. Your existing connection is unchanged.");
+                showStatus("QR scan cancelled. Your existing connection is unchanged.");
             } else {
                 connectToScannedLaptop(scanResult.getContents());
             }
@@ -185,13 +279,13 @@ public class MainActivity extends Activity {
                 throw new JSONException("The QR code does not contain a valid local laptop address.");
             }
         } catch (JSONException e) {
-            pairingStatus.setText(e.getMessage() == null
+            showStatus(e.getMessage() == null
                     ? "Invalid Seamless QR code. Try scanning the code shown on the laptop."
                     : e.getMessage());
             return;
         }
 
-        pairingStatus.setText("Checking " + host + ":" + port + " on your local network…");
+        showStatus("Checking " + host + ":" + port + " on your local network…");
         new Thread(() -> {
             HttpURLConnection connection = null;
             try {
@@ -218,7 +312,7 @@ public class MainActivity extends Activity {
                             "The laptop identity did not match this QR code. Scan a current code from Seamless.");
                 }
                 mainHandler.post(() -> {
-                    pairingStatus.setText("Connected to " + info.optString("device_name")
+                    showStatus("Connected to " + info.optString("device_name")
                             + ". Pairing you now…");
                     String hostArgument = JSONObject.quote(host);
                     String tokenArgument = JSONObject.quote(pairingToken);
@@ -229,7 +323,7 @@ public class MainActivity extends Activity {
                 String message = e instanceof java.net.SocketTimeoutException
                         ? "Connection timed out. Put both devices on the same Wi-Fi and check Seamless is running."
                         : "Could not connect to that laptop. Check the same Wi-Fi network and scan its current QR code.";
-                mainHandler.post(() -> pairingStatus.setText(message));
+                mainHandler.post(() -> showStatus(message));
             } finally {
                 if (connection != null) {
                     connection.disconnect();
